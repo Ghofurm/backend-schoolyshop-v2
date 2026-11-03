@@ -285,6 +285,38 @@ Semua endpoint di bawah ini butuh sesi login (`requireAuth`). `GET /users/me` da
 
 Setelah kata sandi diubah, sesi lain milik user tersebut dihapus; sesi yang dipakai untuk mengubah tetap aktif. Berlaku untuk semua akun, termasuk akun seed.
 
+## Alamat Pengguna
+
+Semua endpoint alamat butuh login dan hanya mengakses alamat milik user tersebut. Alamat milik user lain diperlakukan sebagai tidak ditemukan (404 `NOT_FOUND`).
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/users/me/addresses` | Daftar alamat user, alamat utama lebih dulu; `{ "data": [...] }` |
+| `POST` | `/users/me/addresses` | Buat alamat; 201. Alamat pertama otomatis menjadi utama |
+| `PATCH` | `/users/me/addresses/:id` | Ubah sebagian field; `isPrimary: true` memindahkan flag utama |
+| `DELETE` | `/users/me/addresses/:id` | Hapus alamat; 204. Jika alamat utama dihapus, alamat terlama berikutnya menjadi utama |
+
+Field wajib: `label`, `recipientName`, `phone`, `areaId`, `district`, `city`, `province`, `postalCode`. Field opsional: `address` (alamat lengkap), `note`, `isPrimary`. `areaId` disimpan sebagai string bebas; validasi area Biteship menyusul di issue integrasi.
+
+Hanya satu alamat yang boleh utama: membuat atau mengubah alamat dengan `isPrimary: true` otomatis menurunkan flag alamat utama sebelumnya.
+
+```json
+{
+  "id": 1,
+  "label": "Rumah",
+  "recipientName": "Nama Penerima",
+  "phone": "08123456789",
+  "address": "Jl. Mawar No. 1",
+  "areaId": "3273010",
+  "district": "Bandung Wetan",
+  "city": "Bandung",
+  "province": "Jawa Barat",
+  "postalCode": "40115",
+  "note": "Pagar hijau",
+  "isPrimary": true
+}
+```
+
 ## Katalog Produk & Kategori
 
 Endpoint katalog bersifat publik (tanpa login). Data seed diambil dari `PRODUCT_MOCKS` frontend: 24 produk, 7 kategori, dan 9 seller. Produk kategori `Pakaian Sekolah` mendapat varian ukuran `S`, `M`, `L`, `XL`, `XXL`; kategori lain memakai satu varian `All Size`.

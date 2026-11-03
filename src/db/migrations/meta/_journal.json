@@ -36,6 +36,13 @@
       "when": 1793715447734,
       "tag": "0004_classy_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793718477846,
+      "tag": "0005_right_dakota_north",
+      "breakpoints": true
     }
   ]
 }
