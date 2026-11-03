@@ -33,10 +33,13 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 │   ├── controllers/         # Handler request
 │   ├── db/
 │   │   ├── migrations/      # File migrasi hasil generate Drizzle Kit
-│   │   └── schema.ts        # Definisi schema Drizzle
-│   ├── middlewares/         # Middleware Express (error handler, logger, 404)
+│   │   ├── schema.ts        # Definisi schema Drizzle
+│   │   └── seed.ts          # Seed akun development
+│   ├── middlewares/         # Middleware Express (error handler, logger, auth, 404)
 │   ├── routes/              # Definisi rute API
+│   ├── schemas/             # Skema validasi zod
 │   ├── services/            # Logika bisnis
+│   ├── types/               # Deklarasi tipe Express (req.user)
 │   ├── utils/               # Helper error, validasi zod, dan pagination
 │   ├── app.ts               # Konfigurasi aplikasi Express
 │   └── index.ts             # Entry point server
@@ -96,6 +99,12 @@ npm run db:migrate
 ```
 
 Perintah `npm run db:push` juga tersedia untuk menyinkronkan schema langsung tanpa file migrasi (cocok untuk eksperimen lokal).
+
+Setelah migrasi, isi akun development dengan seed:
+
+```bash
+npm run db:seed
+```
 
 ## Menjalankan Aplikasi
 
@@ -224,6 +233,34 @@ npm run lint
 npm run typecheck
 ```
 
+## Autentikasi & Sesi
+
+Kata sandi di-hash dengan **bcrypt** (cost 12). bcrypt dipilih karena pustaka matang, tersedia prebuilt untuk Node LTS, dan memadai untuk kebutuhan aplikasi ini.
+
+Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie hanya berisi token asli; saat logout baris sesi dihapus, sehingga token tidak bisa dipakai lagi. Cookie `schoolyshop_session` bersifat `httpOnly`, `SameSite=Lax`, `Secure` di production, dan berlaku 1 hari (30 hari bila login mengirim `rememberMe: true`). Frontend harus mengirim request dengan kredensial (`credentials: 'include'`) dan origin-nya harus terdaftar di `FRONTEND_ORIGINS`.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `POST` | `/auth/register` | Body `{ name, email, password }`; 201 mengembalikan `{ id, name, email, role }`; email terdaftar → 409 `EMAIL_TAKEN` |
+| `POST` | `/auth/login` | Body `{ email, password, rememberMe? }`; 200 mengembalikan `{ id, name, email, role }` + cookie sesi; kredensial salah → 401 `INVALID_CREDENTIALS`; akun nonaktif → 403 `ACCOUNT_INACTIVE` |
+| `POST` | `/auth/logout` | Menghapus sesi dan cookie; 204 |
+| `GET` | `/auth/me` | Butuh sesi; mengembalikan user yang login; tanpa sesi → 401 `UNAUTHENTICATED` |
+
+Middleware `requireAuth` dan `requireAdmin` tersedia di `src/middlewares/auth.ts`. `requireAdmin` menolak non-admin dengan 403 `FORBIDDEN`.
+
+### Akun seed development
+
+```bash
+npm run db:seed
+```
+
+| Email | Password | Role |
+| --- | --- | --- |
+| `admin@schoolyshop.test` | `Schoolyshop123!` | `admin` |
+| `user@schoolyshop.test` | `Schoolyshop123!` | `user` |
+
+Seed bersifat idempotent: jika email sudah ada, data akun diperbarui.
+
 ## Scripts
 
 | Script | Deskripsi |
@@ -237,9 +274,10 @@ npm run typecheck
 | `npm run db:generate` | Generate file migrasi dari schema |
 | `npm run db:migrate` | Menjalankan migrasi ke database |
 | `npm run db:push` | Sinkronisasi schema langsung ke database |
+| `npm run db:seed` | Mengisi akun development (admin dan user) |
 | `npm run db:studio` | Membuka Drizzle Studio |
 
 ## Catatan
 
-- Tabel contoh `users` disediakan untuk membuktikan setup Drizzle dan migrasi berjalan. Autentikasi dan fitur e-commerce lainnya akan dikembangkan pada issue terpisah.
+- Tabel `users` dan `sessions` dipakai untuk autentikasi. Fitur e-commerce lainnya akan dikembangkan pada issue terpisah.
 - File `.env` tidak boleh di-commit. Gunakan `.env.example` sebagai referensi konfigurasi.
