@@ -446,7 +446,7 @@ Alur lokal tanpa payment gateway/ongkir nyata: keranjang + alamat + tarif statis
 
 Status pesanan: `Menunggu Pembayaran`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. `Dibatalkan` adalah tambahan backend untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
 
-Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Detail pembuatan VA/payment menyusul di issue pembayaran; saat ini order lahir `unpaid` dan `virtualAccountNumber` pada invoice bernilai `null`.
+Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
 
 Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat kirim, kurir/layanan/ETA/ongkir, serta nama/harga/varian/seller tiap item. Perubahan produk atau alamat setelah checkout tidak mengubah order/invoice lama.
 
@@ -465,6 +465,39 @@ Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat
   "items": [],
   "sellers": [],
   "expiresAt": "2026-01-02T00:00:00.000Z"
+}
+```
+
+## Pembayaran (Simulasi Lokal)
+
+Pembayaran memakai VA lokal dengan bentuk respons yang disiapkan sama seperti payment gateway nanti. Metode yang didukung: BCA (`8808`), BNI (`8809`), dan Mandiri (`8810`). VA memakai pola prefix bank + timestamp + angka acak.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `POST` | `/payments` | Body `{ orderId, method }`; membuat VA dan mengubah order `paymentStatus` menjadi `pending`; 201 |
+| `GET` | `/payments/:id` | Status + data VA; otomatis `expired` bila lewat `expiresAt` |
+| `POST` | `/payments/:id/simulate` | Khusus development: menandai VA lunas, payment `paid`, order `Menunggu Pembayaran → Diproses` |
+
+Aturan:
+
+- Order yang sudah punya pembayaran `pending` atau sudah tidak `Menunggu Pembayaran` → 409 `CONFLICT`.
+- `method` menerima `BCA`, `bni_va`, `Virtual Account Mandiri`, dan bentuk serupa (case-insensitive).
+- Metode tidak dikenal → 422 `VALIDATION` dengan `details.fields.method`.
+- Pembayaran/order lewat `expiresAt` saat dibaca → payment `expired`, order `Dibatalkan`, stok varian dikembalikan.
+- `simulate` mengembalikan 404 di production.
+
+```json
+{
+  "paymentId": 1,
+  "orderId": 1,
+  "method": "BCA",
+  "methodLabel": "Virtual Account BCA",
+  "vaNumber": "88081793688754321",
+  "amount": 267000,
+  "expiresAt": "2026-01-02T00:00:00.000Z",
+  "status": "pending",
+  "paidAt": null,
+  "createdAt": "2026-01-01T00:00:00.000Z"
 }
 ```
 
