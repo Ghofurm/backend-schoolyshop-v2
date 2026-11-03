@@ -1,6 +1,15 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import { findSessionUser, getSessionToken } from '../services/auth.service.js';
+import type { UserProfile } from '../services/users.service.js';
 import { AppError } from '../utils/httpError.js';
+
+export function getAuthUser(req: Request): UserProfile {
+  if (!req.user) {
+    throw new AppError(401, 'Silakan login terlebih dahulu');
+  }
+
+  return req.user;
+}
 
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   try {

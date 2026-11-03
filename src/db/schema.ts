@@ -5,6 +5,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -95,3 +96,23 @@ export const variants = pgTable('variants', {
 });
 
 export type Variant = typeof variants.$inferSelect;
+
+export const cartItems = pgTable(
+  'cart_items',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    variantId: integer('variant_id').references(() => variants.id, { onDelete: 'cascade' }),
+    qty: integer('qty').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex('cart_items_user_product_unique').on(table.userId, table.productId)],
+);
+
+export type CartItem = typeof cartItems.$inferSelect;
