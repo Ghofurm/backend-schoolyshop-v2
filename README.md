@@ -241,10 +241,10 @@ Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie h
 
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
-| `POST` | `/auth/register` | Body `{ name, email, password }`; 201 mengembalikan `{ id, name, email, role }`; email terdaftar → 409 `EMAIL_TAKEN` |
-| `POST` | `/auth/login` | Body `{ email, password, rememberMe? }`; 200 mengembalikan `{ id, name, email, role }` + cookie sesi; kredensial salah → 401 `INVALID_CREDENTIALS`; akun nonaktif → 403 `ACCOUNT_INACTIVE` |
+| `POST` | `/auth/register` | Body `{ name, email, password }`; 201 mengembalikan profil user; email terdaftar → 409 `EMAIL_TAKEN` |
+| `POST` | `/auth/login` | Body `{ email, password, rememberMe? }`; 200 mengembalikan profil user + cookie sesi; kredensial salah → 401 `INVALID_CREDENTIALS`; akun nonaktif → 403 `ACCOUNT_INACTIVE` |
 | `POST` | `/auth/logout` | Menghapus sesi dan cookie; 204 |
-| `GET` | `/auth/me` | Butuh sesi; mengembalikan user yang login; tanpa sesi → 401 `UNAUTHENTICATED` |
+| `GET` | `/auth/me` | Butuh sesi; mengembalikan profil lengkap user yang login; tanpa sesi → 401 `UNAUTHENTICATED` |
 
 Middleware `requireAuth` dan `requireAdmin` tersedia di `src/middlewares/auth.ts`. `requireAdmin` menolak non-admin dengan 403 `FORBIDDEN`.
 
@@ -260,6 +260,29 @@ npm run db:seed
 | `user@schoolyshop.test` | `Schoolyshop123!` | `user` |
 
 Seed bersifat idempotent: jika email sudah ada, data akun diperbarui.
+
+## Profil Pengguna
+
+Semua endpoint di bawah ini butuh sesi login (`requireAuth`). `GET /users/me` dan `GET /auth/me` mengembalikan bentuk yang sama:
+
+```json
+{
+  "id": 1,
+  "name": "Nama Pengguna",
+  "email": "user@example.com",
+  "phone": "08123456789",
+  "role": "user",
+  "createdAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/users/me` | Profil lengkap termasuk telepon dan tanggal daftar |
+| `PATCH` | `/users/me` | Body `{ name?, email?, phone? }`; mengembalikan profil terbaru. Email yang sudah dipakai → 409 `EMAIL_TAKEN`. `phone: ""` atau `null` mengosongkan telepon |
+| `PATCH` | `/users/me/password` | Body `{ currentPassword, newPassword }`; 204 jika berhasil. Kata sandi lama salah → 422 `VALIDATION` dengan `details.fields.currentPassword` |
+
+Setelah kata sandi diubah, sesi lain milik user tersebut dihapus; sesi yang dipakai untuk mengubah tetap aktif. Berlaku untuk semua akun, termasuk akun seed.
 
 ## Scripts
 

@@ -24,7 +24,9 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
       id: sessionUser.id,
       name: sessionUser.name,
       email: sessionUser.email,
+      phone: sessionUser.phone,
       role: sessionUser.role,
+      createdAt: sessionUser.createdAt,
     };
     next();
   } catch (error) {

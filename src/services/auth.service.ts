@@ -1,11 +1,13 @@
-import { createHash, randomBytes } from 'node:crypto';
-import bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import { sessions, users, type User, type UserRole, type UserStatus } from '../db/schema.js';
+import { sessions, users, type UserStatus } from '../db/schema.js';
 import { AppError } from '../utils/httpError.js';
+import { hashPassword, verifyPassword } from '../utils/password.js';
+import { isUniqueViolation } from '../utils/postgres.js';
+import { hashToken } from '../utils/token.js';
+import { toUserProfile, type UserProfile } from './users.service.js';
 
-const BCRYPT_ROUNDS = 12;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -14,37 +16,8 @@ export const SESSION_COOKIE = 'schoolyshop_session';
 // Precomputed hash so a missing email still pays the same bcrypt cost as a real one.
 const DUMMY_PASSWORD_HASH = '$2b$12$c0xomQaarpJNyGJpOh3fgu6o8f070Tx1L3C.OoeGvO8kRuMLsiQNK';
 
-export interface AuthUser {
-  id: number;
-  name: string;
-  email: string;
-  role: UserRole;
-}
-
-export interface SessionUser extends AuthUser {
+export interface SessionUser extends UserProfile {
   status: UserStatus;
-}
-
-function toAuthUser(user: User): AuthUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-  };
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === '23505'
-  );
 }
 
 export function getSessionToken(cookies: unknown): string | undefined {
@@ -61,7 +34,7 @@ export async function registerUser(input: {
   name: string;
   email: string;
   password: string;
-}): Promise<AuthUser> {
+}): Promise<UserProfile> {
   const [existing] = await db
     .select({ id: users.id })
     .from(users)
@@ -72,7 +45,7 @@ export async function registerUser(input: {
     throw new AppError(409, 'Email sudah terdaftar', { code: 'EMAIL_TAKEN' });
   }
 
-  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+  const passwordHash = await hashPassword(input.password);
 
   try {
     const [created] = await db
@@ -88,7 +61,7 @@ export async function registerUser(input: {
       throw new Error('Failed to create user');
     }
 
-    return toAuthUser(created);
+    return toUserProfile(created);
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new AppError(409, 'Email sudah terdaftar', { code: 'EMAIL_TAKEN' });
@@ -98,9 +71,12 @@ export async function registerUser(input: {
   }
 }
 
-export async function authenticateUser(email: string, password: string): Promise<AuthUser> {
+export async function authenticateUser(email: string, password: string): Promise<UserProfile> {
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  const passwordMatches = await verifyPassword(
+    password,
+    user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+  );
 
   if (!user || !passwordMatches) {
     throw new AppError(401, 'Email atau kata sandi salah', { code: 'INVALID_CREDENTIALS' });
@@ -110,7 +86,7 @@ export async function authenticateUser(email: string, password: string): Promise
     throw new AppError(403, 'Akun tidak aktif', { code: 'ACCOUNT_INACTIVE' });
   }
 
-  return toAuthUser(user);
+  return toUserProfile(user);
 }
 
 export async function createSession(
@@ -148,7 +124,7 @@ export async function findSessionUser(token: string): Promise<SessionUser | null
   }
 
   return {
-    ...toAuthUser(row.user),
+    ...toUserProfile(row.user),
     status: row.user.status,
   };
 }
