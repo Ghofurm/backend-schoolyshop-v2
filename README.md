@@ -33,8 +33,9 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 │   ├── controllers/         # Handler request
 │   ├── db/
 │   │   ├── migrations/      # File migrasi hasil generate Drizzle Kit
+│   │   ├── seed/            # Data seed katalog (produk, kategori, seller)
 │   │   ├── schema.ts        # Definisi schema Drizzle
-│   │   └── seed.ts          # Seed akun development
+│   │   └── seed.ts          # Seed akun + katalog development
 │   ├── middlewares/         # Middleware Express (error handler, logger, auth, 404)
 │   ├── routes/              # Definisi rute API
 │   ├── schemas/             # Skema validasi zod
@@ -284,6 +285,65 @@ Semua endpoint di bawah ini butuh sesi login (`requireAuth`). `GET /users/me` da
 
 Setelah kata sandi diubah, sesi lain milik user tersebut dihapus; sesi yang dipakai untuk mengubah tetap aktif. Berlaku untuk semua akun, termasuk akun seed.
 
+## Katalog Produk & Kategori
+
+Endpoint katalog bersifat publik (tanpa login). Data seed diambil dari `PRODUCT_MOCKS` frontend: 24 produk, 7 kategori, dan 9 seller. Produk kategori `Pakaian Sekolah` mendapat varian ukuran `S`, `M`, `L`, `XL`, `XXL`; kategori lain memakai satu varian `All Size`.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/products` | Daftar produk dengan pencarian, filter, sorting, dan pagination |
+| `GET` | `/products/:slug` | Detail produk beserta `variants[]` |
+| `GET` | `/products/:id/related` | Produk terkait (kategori sama dulu, lalu kategori lain); default 4, `?limit=` maks 20 |
+| `GET` | `/categories` | Daftar kategori + `productCount` |
+
+Query `GET /products`:
+
+| Parameter | Keterangan |
+| --- | --- |
+| `q` | Cari di nama produk, kategori, nama seller, dan role seller |
+| `category` | Slug atau nama kategori, mis. `pakaian-sekolah` |
+| `minPrice`, `maxPrice` | Rentang harga angka (Rupiah), memakai harga dasar produk |
+| `sort` | `relevan` (default), `termurah`, `termahal` |
+| `page`, `perPage` | Pagination standar; `perPage` maksimum 50 |
+| `featured` | `true` untuk produk unggulan beranda |
+| `limit` | Membatasi jumlah item (mis. beranda `?featured=true&limit=8`); mengalahkan `perPage` |
+
+Respons daftar memakai format pagination standar. `limit=1` bisa dipakai beranda untuk mengambil `meta.total`:
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "slug": "seragam-batik-sekolah-resmi",
+      "name": "Seragam Batik Sekolah Resmi",
+      "description": "...",
+      "price": 120000,
+      "tag": "Pakaian",
+      "image": null,
+      "featured": true,
+      "category": "Pakaian Sekolah",
+      "categorySlug": "pakaian-sekolah",
+      "seller": { "id": 1, "label": "Bu Siti (Guru)", "role": "Guru" },
+      "stock": 67
+    }
+  ],
+  "meta": { "page": 1, "perPage": 10, "total": 24, "totalPages": 3 }
+}
+```
+
+Detail produk menambahkan `variants[]`:
+
+```json
+{
+  "variants": [
+    { "id": 1, "sku": "seragam-batik-sekolah-resmi-s", "size": "S", "stock": 7, "priceAdjustment": 0 }
+  ]
+}
+```
+
+`GET /products/:id/related` dan `GET /categories` mengembalikan `{ "data": [...] }`.
+
 ## Scripts
 
 | Script | Deskripsi |
@@ -297,7 +357,7 @@ Setelah kata sandi diubah, sesi lain milik user tersebut dihapus; sesi yang dipa
 | `npm run db:generate` | Generate file migrasi dari schema |
 | `npm run db:migrate` | Menjalankan migrasi ke database |
 | `npm run db:push` | Sinkronisasi schema langsung ke database |
-| `npm run db:seed` | Mengisi akun development (admin dan user) |
+| `npm run db:seed` | Mengisi akun dan katalog development |
 | `npm run db:studio` | Membuka Drizzle Studio |
 
 ## Catatan

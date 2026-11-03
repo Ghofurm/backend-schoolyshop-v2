@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { closeDatabase, db } from '../config/database.js';
 import { users } from './schema.js';
+import { seedCatalog } from './seed/catalog.js';
 
 const SEED_PASSWORD = 'Schoolyshop123!';
 
@@ -43,6 +44,7 @@ async function seed(): Promise<void> {
   }
 
   console.log(`Seeded ${SEED_USERS.length} users (password: ${SEED_PASSWORD})`);
+  await seedCatalog();
 }
 
 try {
