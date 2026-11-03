@@ -5,6 +5,7 @@ import {
   cartItems,
   orderItems,
   orders,
+  payments,
   products,
   sellers,
   shippingRates,
@@ -179,7 +180,7 @@ function toView(order: Order, items: OrderItem[]): OrderView {
   };
 }
 
-async function expireOrder(orderId: number): Promise<void> {
+export async function cancelOrderForExpiry(orderId: number): Promise<void> {
   await db.transaction(async (tx) => {
     const [expired] = await tx
       .update(orders)
@@ -190,6 +191,11 @@ async function expireOrder(orderId: number): Promise<void> {
     if (!expired) {
       return;
     }
+
+    await tx
+      .update(payments)
+      .set({ status: 'expired', updatedAt: new Date() })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')));
 
     const items = await tx
       .select({ variantId: orderItems.variantId, qty: orderItems.qty })
@@ -208,19 +214,39 @@ async function expireOrder(orderId: number): Promise<void> {
 }
 
 export async function expirePendingOrders(userId: number): Promise<void> {
-  const pending = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.userId, userId),
-        eq(orders.status, 'Menunggu Pembayaran'),
-        lte(orders.expiresAt, new Date()),
+  const now = new Date();
+  const [pendingByOrder, pendingByPayment] = await Promise.all([
+    db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.userId, userId),
+          eq(orders.status, 'Menunggu Pembayaran'),
+          lte(orders.expiresAt, now),
+        ),
       ),
-    );
+    db
+      .select({ orderId: payments.orderId })
+      .from(payments)
+      .innerJoin(orders, eq(payments.orderId, orders.id))
+      .where(
+        and(
+          eq(orders.userId, userId),
+          eq(orders.status, 'Menunggu Pembayaran'),
+          eq(payments.status, 'pending'),
+          lte(payments.expiresAt, now),
+        ),
+      ),
+  ]);
 
-  for (const order of pending) {
-    await expireOrder(order.id);
+  const orderIds = new Set([
+    ...pendingByOrder.map((order) => order.id),
+    ...pendingByPayment.map((payment) => payment.orderId),
+  ]);
+
+  for (const orderId of orderIds) {
+    await cancelOrderForExpiry(orderId);
   }
 }
 
@@ -517,6 +543,12 @@ export async function receiveOrder(userId: number, orderId: number): Promise<Ord
 
 export async function getInvoice(userId: number, orderId: number) {
   const order = await getOrder(userId, orderId);
+  const [payment] = await db
+    .select({ methodLabel: payments.methodLabel, vaNumber: payments.vaNumber })
+    .from(payments)
+    .where(eq(payments.orderId, orderId))
+    .orderBy(desc(payments.id))
+    .limit(1);
   const shippingAddress = [
     order.shipping.address,
     order.shipping.district,
@@ -538,9 +570,9 @@ export async function getInvoice(userId: number, orderId: number) {
     shippingAddress,
     shippingPostalCode: order.shipping.postalCode,
     shipping: order.shipping,
-    paymentMethod: order.paymentMethod,
+    paymentMethod: order.paymentMethod ?? payment?.methodLabel ?? null,
     paymentStatus: order.paymentStatus,
-    virtualAccountNumber: null,
+    virtualAccountNumber: payment?.vaNumber ?? null,
     items: order.items,
     subtotal: order.subtotal,
     shippingCost: order.shippingCost,

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -243,3 +244,34 @@ export const orderItems = pgTable(
 );
 
 export type OrderItem = typeof orderItems.$inferSelect;
+
+export const payments = pgTable(
+  'payments',
+  {
+    id: serial('id').primaryKey(),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    method: varchar('method', { length: 20 }).notNull(),
+    methodLabel: varchar('method_label', { length: 80 }).notNull(),
+    vaNumber: varchar('va_number', { length: 30 }).notNull(),
+    amount: integer('amount').notNull(),
+    status: varchar('status', { length: 20 }).$type<PaymentStatus>().notNull().default('pending'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('payments_user_id_idx').on(table.userId),
+    index('payments_order_id_idx').on(table.orderId),
+    uniqueIndex('payments_pending_order_unique')
+      .on(table.orderId)
+      .where(sql`${table.status} = 'pending'`),
+  ],
+);
+
+export type Payment = typeof payments.$inferSelect;

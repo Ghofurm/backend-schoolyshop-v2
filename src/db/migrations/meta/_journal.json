@@ -50,6 +50,13 @@
       "when": 1793718865774,
       "tag": "0006_cynical_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793719205507,
+      "tag": "0007_wealthy_taskmaster",
+      "breakpoints": true
     }
   ]
 }
