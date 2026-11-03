@@ -42,6 +42,21 @@ function readEnvironment(): Environment {
   return value as Environment;
 }
 
+function readList(name: string, fallback: string[]): string[] {
+  const value = process.env[name];
+
+  if (value === undefined || value.trim() === '') {
+    return fallback;
+  }
+
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : fallback;
+}
+
 function readBoolean(name: string, fallback = false): boolean {
   const value = process.env[name];
 
@@ -61,6 +76,7 @@ function readBoolean(name: string, fallback = false): boolean {
 export const env = Object.freeze({
   NODE_ENV: readEnvironment(),
   PORT: readPort('PORT', 3000),
+  FRONTEND_ORIGINS: readList('FRONTEND_ORIGINS', ['http://localhost:5173']),
   DB_HOST: requireEnv('DB_HOST'),
   DB_PORT: readPort('DB_PORT', 5432),
   DB_USER: requireEnv('DB_USER'),
