@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgTable,
   serial,
@@ -116,3 +117,29 @@ export const cartItems = pgTable(
 );
 
 export type CartItem = typeof cartItems.$inferSelect;
+
+export const addresses = pgTable(
+  'addresses',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    label: varchar('label', { length: 40 }).notNull(),
+    recipientName: varchar('recipient_name', { length: 120 }).notNull(),
+    phone: varchar('phone', { length: 32 }).notNull(),
+    address: varchar('address', { length: 500 }),
+    areaId: varchar('area_id', { length: 64 }).notNull(),
+    district: varchar('district', { length: 120 }).notNull(),
+    city: varchar('city', { length: 120 }).notNull(),
+    province: varchar('province', { length: 120 }).notNull(),
+    postalCode: varchar('postal_code', { length: 10 }).notNull(),
+    note: varchar('note', { length: 500 }),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('addresses_user_id_idx').on(table.userId)],
+);
+
+export type Address = typeof addresses.$inferSelect;
