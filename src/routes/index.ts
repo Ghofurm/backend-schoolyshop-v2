@@ -7,6 +7,8 @@ import { healthRouter } from './health.routes.js';
 import { ordersRouter } from './orders.routes.js';
 import { paymentsRouter } from './payments.routes.js';
 import { productsRouter } from './products.routes.js';
+import { returnsRouter } from './returns.routes.js';
+import { reviewsRouter } from './reviews.routes.js';
 import { shippingRouter } from './shipping.routes.js';
 import { usersRouter } from './users.routes.js';
 
@@ -22,3 +24,5 @@ routes.use('/shipping', shippingRouter);
 routes.use('/checkouts', checkoutsRouter);
 routes.use('/orders', ordersRouter);
 routes.use('/payments', paymentsRouter);
+routes.use('/returns', returnsRouter);
+routes.use('/reviews', reviewsRouter);

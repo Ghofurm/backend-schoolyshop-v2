@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { detail, invoice, list, receive } from '../controllers/orders.controller.js';
+import { create as createReviews } from '../controllers/reviews.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
 
 export const ordersRouter = Router();
@@ -9,3 +10,4 @@ ordersRouter.get('/', list);
 ordersRouter.get('/:id/invoice', invoice);
 ordersRouter.get('/:id', detail);
 ordersRouter.post('/:id/receive', receive);
+ordersRouter.post('/:id/reviews', createReviews);

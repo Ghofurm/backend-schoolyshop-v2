@@ -33,6 +33,9 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PAYMENT_STATUSES = ['unpaid', 'pending', 'paid', 'expired', 'refunded'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+export const RETURN_STATUSES = ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] as const;
+export type ReturnStatus = (typeof RETURN_STATUSES)[number];
+
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 120 }).notNull(),
@@ -275,3 +278,103 @@ export const payments = pgTable(
 );
 
 export type Payment = typeof payments.$inferSelect;
+
+export const returns = pgTable(
+  'returns',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 30 })
+      .$type<ReturnStatus>()
+      .notNull()
+      .default('Menunggu Keputusan'),
+    decisionAt: timestamp('decision_at', { withTimezone: true }),
+    refundMethod: varchar('refund_method', { length: 80 }),
+    adminNote: varchar('admin_note', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('returns_user_id_idx').on(table.userId),
+    index('returns_order_id_idx').on(table.orderId),
+    uniqueIndex('returns_active_order_unique')
+      .on(table.orderId)
+      .where(sql`${table.status} in ('Menunggu Keputusan', 'Disetujui')`),
+  ],
+);
+
+export type Return = typeof returns.$inferSelect;
+
+export const returnItems = pgTable(
+  'return_items',
+  {
+    id: serial('id').primaryKey(),
+    returnId: integer('return_id')
+      .notNull()
+      .references(() => returns.id, { onDelete: 'cascade' }),
+    orderItemId: integer('order_item_id').references(() => orderItems.id, {
+      onDelete: 'set null',
+    }),
+    productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+    productName: varchar('product_name', { length: 200 }).notNull(),
+    variantId: integer('variant_id').references(() => variants.id, { onDelete: 'set null' }),
+    variantSize: varchar('variant_size', { length: 20 }),
+    qty: integer('qty').notNull(),
+    reason: varchar('reason', { length: 500 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('return_items_return_id_idx').on(table.returnId)],
+);
+
+export type ReturnItem = typeof returnItems.$inferSelect;
+
+export const returnPhotos = pgTable(
+  'return_photos',
+  {
+    id: serial('id').primaryKey(),
+    returnId: integer('return_id')
+      .notNull()
+      .references(() => returns.id, { onDelete: 'cascade' }),
+    url: varchar('url', { length: 500 }).notNull(),
+    originalName: varchar('original_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    size: integer('size').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('return_photos_return_id_idx').on(table.returnId)],
+);
+
+export type ReturnPhoto = typeof returnPhotos.$inferSelect;
+
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    orderItemId: integer('order_item_id').references(() => orderItems.id, {
+      onDelete: 'set null',
+    }),
+    productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+    productName: varchar('product_name', { length: 200 }).notNull(),
+    rating: integer('rating').notNull(),
+    comment: text('comment').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('reviews_user_id_idx').on(table.userId),
+    index('reviews_order_id_idx').on(table.orderId),
+    uniqueIndex('reviews_order_product_unique').on(table.orderId, table.productId),
+  ],
+);
+
+export type Review = typeof reviews.$inferSelect;

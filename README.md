@@ -501,6 +501,74 @@ Aturan:
 }
 ```
 
+## Retur & Ulasan
+
+### Retur
+
+Semua endpoint retur butuh login dan hanya mengakses data milik user. Retur hanya bisa diajukan untuk pesanan berstatus `Dikirim` atau `Selesai`; satu pesanan hanya boleh punya satu retur aktif (`Menunggu Keputusan`/`Disetujui`).
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `POST` | `/returns` | Ajukan retur; 201 dengan status `Menunggu Keputusan` |
+| `GET` | `/returns` | Daftar retur user + item, foto, dan status keputusan |
+| `POST` | `/returns/:id/photos` | Upload foto barang (multipart field `photos`); 201 |
+
+Body `POST /returns`:
+
+```json
+{
+  "orderId": 1,
+  "items": [
+    { "orderItemId": 1, "qty": 1, "reason": "Ukuran tidak cocok" },
+    { "productId": 3, "qty": 1, "reason": "Sampul rusak" }
+  ]
+}
+```
+
+`orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `adminNote` (masih `null` sampai issue admin).
+
+Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. File disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya di `photos[].url`.
+
+```json
+{
+  "id": 1,
+  "orderId": 1,
+  "status": "Menunggu Keputusan",
+  "decisionAt": null,
+  "refundMethod": null,
+  "adminNote": null,
+  "submittedAt": "2026-01-01T00:00:00.000Z",
+  "items": [
+    { "id": 1, "orderItemId": 1, "productId": 1, "productName": "Seragam Batik Sekolah Resmi", "variantSize": "S", "qty": 1, "reason": "Ukuran tidak cocok" }
+  ],
+  "photos": [
+    { "id": 1, "url": "/uploads/returns/1/foto.png", "originalName": "foto.png", "mimeType": "image/png", "size": 1024 }
+  ]
+}
+```
+
+### Ulasan
+
+Ulasan hanya untuk pesanan milik user berstatus `Selesai`. Satu produk per pesanan hanya bisa diulas sekali; ulasan tidak bisa diedit dan belum dimoderasi.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `POST` | `/orders/:id/reviews` | Kirim satu/lebih ulasan; 201 `{ "data": [...] }` |
+| `GET` | `/reviews` | Riwayat ulasan user dengan pagination |
+
+Body menerima `{ "reviews": [...] }` (juga array langsung atau `{ "items": [...] }`):
+
+```json
+{
+  "reviews": [
+    { "productId": 1, "rating": 5, "comment": "Bahan bagus" },
+    { "productId": 3, "rating": 4, "comment": "Cepat sampai" }
+  ]
+}
+```
+
+Rating 1–5, komentar opsional maksimal 1000 karakter. Duplikat → 409 `CONFLICT`; pesanan belum `Selesai` atau produk bukan bagian pesanan → 422.
+
 ## Scripts
 
 | Script | Deskripsi |
