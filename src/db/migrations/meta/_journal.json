@@ -15,6 +15,13 @@
       "when": 1793712363347,
       "tag": "0001_fat_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793714452556,
+      "tag": "0002_common_archangel",
+      "breakpoints": true
     }
   ]
 }

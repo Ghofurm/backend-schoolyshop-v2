@@ -1,7 +1,7 @@
-import type { AuthUser } from '../services/auth.service.js';
+import type { UserProfile } from '../services/users.service.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
-    user?: AuthUser;
+    user?: UserProfile;
   }
 }
