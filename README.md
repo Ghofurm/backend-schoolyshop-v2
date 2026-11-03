@@ -344,6 +344,60 @@ Detail produk menambahkan `variants[]`:
 
 `GET /products/:id/related` dan `GET /categories` mengembalikan `{ "data": [...] }`.
 
+## Keranjang Belanja
+
+Keranjang disimpan per user dan semua endpoint butuh login (`requireAuth`). Satu baris keranjang mewakili satu produk; menambahkan produk yang sama akan menambah `qty` pada baris tersebut. Jika produk sudah ada dengan varian berbeda, permintaan ditolak 422; hapus item lama dulu untuk mengganti varian.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/cart` | Item keranjang + detail produk/varian, subtotal, total, dan jumlah barang |
+| `POST` | `/cart/items` | Body `{ productId, variantId?, qty? }`; 201 mengembalikan keranjang terbaru |
+| `PATCH` | `/cart/items/:productId` | Body `{ qty }` (nilai absolut); 200 mengembalikan keranjang terbaru |
+| `DELETE` | `/cart/items/:productId` | Hapus satu produk dari keranjang; 204 |
+| `DELETE` | `/cart` | Kosongkan keranjang; 204 |
+
+Aturan stok:
+
+- Jika `variantId` dikirim, stok dicek dari varian tersebut dan varian harus milik produk yang sama.
+- Jika `variantId` tidak dikirim, stok dicek dari total stok semua varian produk.
+- Melebihi stok → 422 `VALIDATION` dengan `details.fields.qty` berisi sisa stok.
+- `variantId` tidak cocok dengan produk → 422 dengan `details.fields.variantId`.
+- Produk atau item keranjang tidak ditemukan → 404 `NOT_FOUND`.
+
+Harga tidak disimpan di keranjang: `unitPrice` dihitung dari harga produk saat request ditambah `priceAdjustment` varian, lalu `subtotal = unitPrice × qty`.
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "productId": 1,
+      "variantId": 1,
+      "qty": 2,
+      "unitPrice": 120000,
+      "subtotal": 240000,
+      "product": {
+        "id": 1,
+        "slug": "seragam-batik-sekolah-resmi",
+        "name": "Seragam Batik Sekolah Resmi",
+        "price": 120000,
+        "image": null,
+        "seller": { "id": 1, "label": "Bu Siti (Guru)", "role": "Guru" }
+      },
+      "variant": {
+        "id": 1,
+        "sku": "seragam-batik-sekolah-resmi-s",
+        "size": "S",
+        "stock": 7,
+        "priceAdjustment": 0
+      }
+    }
+  ],
+  "total": 240000,
+  "itemCount": 2
+}
+```
+
 ## Scripts
 
 | Script | Deskripsi |
