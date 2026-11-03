@@ -430,6 +430,44 @@ Harga tidak disimpan di keranjang: `unitPrice` dihitung dari harga produk saat r
 }
 ```
 
+## Checkout, Pesanan & Invoice
+
+Alur lokal tanpa payment gateway/ongkir nyata: keranjang + alamat + tarif statis menjadi pesanan dengan snapshot data. Semua endpoint butuh login kecuali `GET /shipping/rates`.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/shipping/rates` | Tarif kurir statis (`courier`, `service`, `price`, `eta`); `destinationAreaId`/`weight` diterima tapi diabaikan |
+| `POST` | `/checkouts` | Body `{ addressId, shippingRateId, paymentMethod? }`; membuat order dari keranjang, mengurangi stok, mengosongkan keranjang; 201 `{ orderId }` |
+| `GET` | `/checkouts/:id` | Ringkasan order untuk halaman pembayaran (milik user) |
+| `GET` | `/orders` | Riwayat pesanan + item/seller + status pembayaran; filter `status`, pagination |
+| `GET` | `/orders/:id` | Detail lengkap dari snapshot |
+| `POST` | `/orders/:id/receive` | Konfirmasi diterima → `Selesai`; pesanan final ditolak 422 |
+| `GET` | `/orders/:id/invoice` | Invoice dari snapshot checkout |
+
+Status pesanan: `Menunggu Pembayaran`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. `Dibatalkan` adalah tambahan backend untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
+
+Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Detail pembuatan VA/payment menyusul di issue pembayaran; saat ini order lahir `unpaid` dan `virtualAccountNumber` pada invoice bernilai `null`.
+
+Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat kirim, kurir/layanan/ETA/ongkir, serta nama/harga/varian/seller tiap item. Perubahan produk atau alamat setelah checkout tidak mengubah order/invoice lama.
+
+```json
+{
+  "id": 1,
+  "status": "Menunggu Pembayaran",
+  "paymentStatus": "unpaid",
+  "paymentMethod": "Virtual Account BCA",
+  "subtotal": 252000,
+  "shippingCost": 15000,
+  "total": 267000,
+  "buyer": { "name": "Nama", "email": "user@example.com", "phone": "0812..." },
+  "shipping": { "recipientName": "Nama", "city": "Bandung", "postalCode": "40115" },
+  "courier": { "code": "jne-reguler", "name": "JNE", "service": "Reguler", "eta": "1-2 hari kerja" },
+  "items": [],
+  "sellers": [],
+  "expiresAt": "2026-01-02T00:00:00.000Z"
+}
+```
+
 ## Scripts
 
 | Script | Deskripsi |
