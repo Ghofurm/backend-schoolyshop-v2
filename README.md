@@ -34,9 +34,10 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 │   ├── db/
 │   │   ├── migrations/      # File migrasi hasil generate Drizzle Kit
 │   │   └── schema.ts        # Definisi schema Drizzle
-│   ├── middlewares/         # Middleware Express (error handler, 404)
+│   ├── middlewares/         # Middleware Express (error handler, logger, 404)
 │   ├── routes/              # Definisi rute API
 │   ├── services/            # Logika bisnis
+│   ├── utils/               # Helper error, validasi zod, dan pagination
 │   ├── app.ts               # Konfigurasi aplikasi Express
 │   └── index.ts             # Entry point server
 ├── .env.example
@@ -63,6 +64,7 @@ Variabel yang tersedia:
 | --- | --- | --- | --- |
 | `NODE_ENV` | Tidak | `development` | `development`, `test`, atau `production` |
 | `PORT` | Tidak | `3000` | Port server Express |
+| `FRONTEND_ORIGINS` | Tidak | `http://localhost:5173` | Origin frontend yang diizinkan CORS, dipisah koma |
 | `DB_HOST` | Ya | - | Host PostgreSQL |
 | `DB_PORT` | Tidak | `5432` | Port PostgreSQL |
 | `DB_USER` | Ya | - | User PostgreSQL |
@@ -133,6 +135,94 @@ Contoh response ketika server dan database sehat:
 ```
 
 Endpoint mengembalikan HTTP `200` jika database terhubung, atau HTTP `503` dengan status `degraded` jika koneksi database bermasalah.
+
+## Konvensi API
+
+Semua endpoint berikutnya mengikuti konvensi di bawah ini.
+
+### Format error
+
+```json
+{
+  "code": "VALIDATION",
+  "message": "Data yang dikirim tidak valid",
+  "details": {}
+}
+```
+
+`details` selalu ada (objek kosong bila tidak ada detail). Lempar error dengan `AppError` dari `src/utils/httpError.ts`:
+
+```ts
+throw new AppError(409, 'Email sudah terdaftar', { code: 'EMAIL_TAKEN' });
+```
+
+Pemetaan status ke kode default:
+
+| HTTP | `code` |
+| --- | --- |
+| 400 | `BAD_REQUEST` |
+| 401 | `UNAUTHENTICATED` (atau `INVALID_CREDENTIALS`) |
+| 403 | `FORBIDDEN` (atau `ACCOUNT_INACTIVE`) |
+| 404 | `NOT_FOUND` |
+| 409 | `CONFLICT` (atau `EMAIL_TAKEN`) |
+| 422 | `VALIDATION` |
+| 500 | `SERVER` |
+
+Error yang tidak tertangani selalu menjadi 500 `SERVER`; pesan internal hanya dikembalikan saat bukan production.
+
+### Validasi input
+
+Validasi memakai zod di layer controller lewat helper `parseInput`:
+
+```ts
+const query = parseInput(paginationQuerySchema, req.query);
+```
+
+Jika gagal, helper melempar 422 `VALIDATION` dengan `details.fields` berisi satu pesan per field. Field bersarang memakai dot (`address.city`); error tingkat root memakai `root`:
+
+```json
+{
+  "code": "VALIDATION",
+  "message": "Data yang dikirim tidak valid",
+  "details": {
+    "fields": {
+      "email": "Email tidak valid"
+    }
+  }
+}
+```
+
+### Pagination
+
+Query standar: `page` (default `1`) dan `perPage` (default `10`, maksimum `50`). Gunakan `paginationQuerySchema`, `paginationOffset`, dan `paginate` dari `src/utils/pagination.ts` agar format tidak disalin per endpoint.
+
+```ts
+const query = parseInput(paginationQuerySchema, req.query);
+const [rows, total] = await getRows(query); // implementasi endpoint
+res.json(paginate(rows, total, query));
+```
+
+Bentuk respons:
+
+```json
+{
+  "data": [],
+  "meta": { "page": 1, "perPage": 10, "total": 0, "totalPages": 0 }
+}
+```
+
+### CORS dan logger
+
+CORS mengizinkan origin dari `FRONTEND_ORIGINS` (dipisah koma) dan mengirim kredensial (cookie). Request logger (method, path, status, durasi) hanya aktif di `NODE_ENV=development`.
+
+### Sebelum commit
+
+Wajib lulus:
+
+```bash
+npm run lint
+npm run typecheck
+```
 
 ## Scripts
 

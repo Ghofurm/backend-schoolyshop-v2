@@ -1,5 +1,8 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { ZodError } from 'zod';
 import { env } from '../config/env.js';
+import { AppError } from '../utils/httpError.js';
+import { validationError } from '../utils/validation.js';
 
 function resolveStatus(error: unknown): number {
   if (typeof error === 'object' && error !== null) {
@@ -14,23 +17,40 @@ function resolveStatus(error: unknown): number {
   return 500;
 }
 
-export const notFoundHandler: RequestHandler = (req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: `Route ${req.method} ${req.originalUrl} not found`,
-  });
+function toAppError(error: unknown): AppError {
+  if (error instanceof AppError) {
+    return error;
+  }
+
+  if (error instanceof ZodError) {
+    return validationError(error);
+  }
+
+  const status = resolveStatus(error);
+  const fallback = status >= 500 ? 'Internal Server Error' : 'Permintaan tidak dapat diproses';
+  const message =
+    error instanceof Error && error.message ? error.message : fallback;
+
+  return new AppError(
+    status,
+    status >= 500 && env.NODE_ENV === 'production' ? 'Internal Server Error' : message,
+  );
+}
+
+export const notFoundHandler: RequestHandler = (req, _res, next) => {
+  next(new AppError(404, `Route ${req.method} ${req.originalUrl} not found`));
 };
 
 export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  const status = resolveStatus(error);
-  const message = error instanceof Error ? error.message : 'Internal Server Error';
+  const appError = toAppError(error);
 
-  if (status >= 500 && env.NODE_ENV !== 'test') {
+  if (appError.status >= 500 && env.NODE_ENV !== 'test') {
     console.error(error);
   }
 
-  res.status(status).json({
-    status: 'error',
-    message: status >= 500 && env.NODE_ENV === 'production' ? 'Internal Server Error' : message,
+  res.status(appError.status).json({
+    code: appError.code,
+    message: appError.message,
+    details: appError.details,
   });
 };
