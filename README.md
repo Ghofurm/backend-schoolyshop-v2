@@ -13,6 +13,7 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 | ORM | Drizzle ORM |
 | Hot reload | tsx |
 | Linter | ESLint |
+| Dokumentasi API | Swagger UI / OpenAPI 3 |
 
 ## Prasyarat
 
@@ -36,6 +37,8 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 │   │   ├── seed/            # Data seed katalog (produk, kategori, seller)
 │   │   ├── schema.ts        # Definisi schema Drizzle
 │   │   └── seed.ts          # Seed akun + katalog development
+│   ├── docs/
+│   │   └── openapi.ts       # Dokumen OpenAPI untuk Swagger UI
 │   ├── middlewares/         # Middleware Express (error handler, logger, auth, 404)
 │   ├── routes/              # Definisi rute API
 │   ├── schemas/             # Skema validasi zod
@@ -150,6 +153,20 @@ npm start
 
 Hasil build TypeScript disimpan di folder `dist/`.
 
+## Dokumentasi API (Swagger)
+
+Swagger UI tersedia di `http://localhost:3000/docs` dan spec JSON di `http://localhost:3000/docs/openapi.json`. Dokumentasi bisa dibuka tanpa login.
+
+Pendekatan yang dipakai: **spec-first** dalam bentuk objek OpenAPI 3 di `src/docs/openapi.ts`. Alasannya, endpoint sudah banyak dan tersebar di banyak modul; code-first membutuhkan anotasi JSDoc/registry tambahan di hampir semua route dan tetap perlu mendefinisikan skema respons secara manual. Satu objek spec lebih mudah ditinjau dan dijaga konsisten, dengan aturan pembaruan di bawah.
+
+- Endpoint dikelompokkan per domain (Auth, Products, Cart, Orders, Admin, Webhooks, dst.).
+- Format error `{ code, message, details }`, contoh 401/403/404/409/422/500, dan format pagination `{ data, meta }` tersedia sebagai komponen bersama.
+- **Mencoba endpoint ber-cookie:** buka `/docs`, jalankan `POST /auth/login` lewat tombol *Try it out*, lalu panggil endpoint lain. UI memakai origin yang sama dan `withCredentials`, jadi cookie `schoolyshop_session` ikut terkirim.
+- Webhook Biteship/Midtrans didokumentasikan sebagai grup terpisah dengan skema payload dan catatan signature.
+- Dokumen tidak memuat secret/environment.
+
+**Aturan keberlanjutan:** setiap PR yang menambah atau mengubah endpoint wajib memperbarui `src/docs/openapi.ts`. Spec yang basi lebih buruk daripada tidak ada dokumentasi.
+
 ## Health Check
 
 ```bash
@@ -257,6 +274,8 @@ Wajib lulus:
 npm run lint
 npm run typecheck
 ```
+
+Jika menambah/mengubah endpoint, perbarui juga `src/docs/openapi.ts`.
 
 ## Autentikasi & Sesi
 
