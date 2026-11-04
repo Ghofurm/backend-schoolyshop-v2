@@ -42,6 +42,9 @@ export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 export const ADMIN_SHIPMENT_STATUSES = ['Siap Dikirim', ...SHIPMENT_STATUSES] as const;
 export type AdminShipmentStatus = (typeof ADMIN_SHIPMENT_STATUSES)[number];
 
+export const PRODUCT_STATUSES = ['Aktif', 'Nonaktif'] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 120 }).notNull(),
@@ -70,8 +73,9 @@ export type Session = typeof sessions.$inferSelect;
 
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
-  name: varchar('name', { length: 120 }).notNull(),
+  name: varchar('name', { length: 120 }).notNull().unique(),
   slug: varchar('slug', { length: 140 }).notNull().unique(),
+  description: text('description').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -81,29 +85,39 @@ export const sellers = pgTable('sellers', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 160 }).notNull().unique(),
   role: varchar('role', { length: 20 }).$type<SellerRole>().notNull(),
+  business: varchar('business', { length: 160 }),
+  type: varchar('type', { length: 120 }),
+  kk: varchar('kk', { length: 32 }),
+  address: varchar('address', { length: 500 }),
+  whatsapp: varchar('whatsapp', { length: 32 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type Seller = typeof sellers.$inferSelect;
 
-export const products = pgTable('products', {
-  id: serial('id').primaryKey(),
-  slug: varchar('slug', { length: 180 }).notNull().unique(),
-  name: varchar('name', { length: 200 }).notNull(),
-  description: text('description').notNull(),
-  price: integer('price').notNull(),
-  tag: varchar('tag', { length: 60 }).notNull(),
-  image: varchar('image', { length: 500 }),
-  featured: boolean('featured').notNull().default(false),
-  categoryId: integer('category_id')
-    .notNull()
-    .references(() => categories.id),
-  sellerId: integer('seller_id')
-    .notNull()
-    .references(() => sellers.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const products = pgTable(
+  'products',
+  {
+    id: serial('id').primaryKey(),
+    slug: varchar('slug', { length: 180 }).notNull().unique(),
+    name: varchar('name', { length: 200 }).notNull(),
+    description: text('description').notNull(),
+    price: integer('price').notNull(),
+    tag: varchar('tag', { length: 60 }).notNull(),
+    image: varchar('image', { length: 500 }),
+    featured: boolean('featured').notNull().default(false),
+    status: varchar('status', { length: 20 }).$type<ProductStatus>().notNull().default('Aktif'),
+    categoryId: integer('category_id')
+      .notNull()
+      .references(() => categories.id),
+    sellerId: integer('seller_id')
+      .notNull()
+      .references(() => sellers.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('products_status_idx').on(table.status)],
+);
 
 export type Product = typeof products.$inferSelect;
 

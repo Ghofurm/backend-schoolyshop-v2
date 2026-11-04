@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '../config/database.js';
 import { categories, products } from '../db/schema.js';
 
@@ -18,7 +18,10 @@ export async function listCategories(): Promise<CategorySummary[]> {
       productCount: sql<number>`count(${products.id})`.mapWith(Number),
     })
     .from(categories)
-    .leftJoin(products, eq(products.categoryId, categories.id))
+    .leftJoin(
+      products,
+      and(eq(products.categoryId, categories.id), eq(products.status, 'Aktif')),
+    )
     .groupBy(categories.id, categories.name, categories.slug)
     .orderBy(asc(categories.id));
 
