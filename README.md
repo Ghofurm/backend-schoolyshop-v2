@@ -91,6 +91,15 @@ Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data
 | `BITESHIP_WEBHOOK_HEADER_KEY` | Tidak | `x-biteship-webhook-secret` | Nama header signature webhook |
 | `BITESHIP_WEBHOOK_SECRET` | Tidak | - | Nilai secret header webhook; webhook ditolak bila kosong/tidak cocok |
 
+Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `MIDTRANS_SERVER_KEY` | Tidak | - | Aktifkan Midtrans Core API bila diisi |
+| `MIDTRANS_CLIENT_KEY` | Tidak | - | Client key Midtrans (untuk frontend) |
+| `MIDTRANS_IS_PRODUCTION` | Tidak | `false` | `true` memakai API production dan mematikan simulate |
+| `MIDTRANS_BASE_URL` | Tidak | otomatis | Override base URL (sandbox/production) |
+
 Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi.
 
 ## Setup Database
@@ -483,31 +492,43 @@ Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat
 }
 ```
 
-## Pembayaran (Simulasi Lokal)
+## Pembayaran
 
-Pembayaran memakai VA lokal dengan bentuk respons yang disiapkan sama seperti payment gateway nanti. Metode yang didukung: BCA (`8808`), BNI (`8809`), dan Mandiri (`8810`). VA memakai pola prefix bank + timestamp + angka acak.
+Default-nya pembayaran memakai VA lokal. Jika `MIDTRANS_SERVER_KEY` diisi, pembuatan VA memakai Midtrans Core API (`POST /v2/charge`); tanpa key semuanya kembali ke simulasi lokal. Metode yang didukung: BCA, BNI, dan Mandiri (Mandiri Bill). Pada mode lokal, VA memakai prefix bank + timestamp + angka acak.
 
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
-| `POST` | `/payments` | Body `{ orderId, method }`; membuat VA dan mengubah order `paymentStatus` menjadi `pending`; 201 |
-| `GET` | `/payments/:id` | Status + data VA; otomatis `expired` bila lewat `expiresAt` |
-| `POST` | `/payments/:id/simulate` | Khusus development: menandai VA lunas, payment `paid`, order `Menunggu Pembayaran → Menunggu Verifikasi` |
+| `POST` | `/payments` | Body `{ orderId, method }`; membuat VA Midtrans/lokal dan mengubah order `paymentStatus` menjadi `pending`; 201 |
+| `GET` | `/payments/:id` | Status + data VA; fallback lokal menghitung `expired` bila lewat `expiresAt` |
+| `POST` | `/payments/:id/simulate` | Khusus development: tandai lunas tanpa gateway; 404 di production atau saat Midtrans production aktif |
 
 Aturan:
 
 - Order yang sudah punya pembayaran `pending` atau sudah tidak `Menunggu Pembayaran` → 409 `CONFLICT`.
 - `method` menerima `BCA`, `bni_va`, `Virtual Account Mandiri`, dan bentuk serupa (case-insensitive).
 - Metode tidak dikenal → 422 `VALIDATION` dengan `details.fields.method`.
-- Pembayaran/order lewat `expiresAt` saat dibaca → payment `expired`, order `Dibatalkan`, stok varian dikembalikan.
+- Pembayaran/order lewat `expiresAt` saat dibaca → payment `expired`, order `Dibatalkan`, stok varian dikembalikan (fallback bila webhook terlewat).
 - `simulate` mengembalikan 404 di production.
+
+Mode Midtrans:
+
+- `POST /v2/charge` memakai `custom_expiry` 24 jam; `expiresAt` payment dan order disamakan dengan respons Midtrans.
+- `provider`, `externalOrderId`, `externalId`, dan `billerCode` disimpan di tabel `payments` (VA Mandiri memakai `bill_key` + `biller_code`).
+- `POST /webhooks/midtrans` memverifikasi `signature_key = SHA512(order_id + status_code + gross_amount + server_key)` dan mencocokkan nominal.
+- `settlement` (atau `capture` + fraud accept) → `markPaid`: payment `paid`, order `Menunggu Verifikasi` (admin tetap harus approve → `Diproses`).
+- `expire`/`cancel`/`deny`/`failure` → payment `expired`, order `Dibatalkan`, stok kembali.
+- `pending` tidak mengubah status; notifikasi duplikat diabaikan (idempotent).
+- Midtrans down/timeout → 502 `SERVER`; tanpa key, alur lokal tetap jalan.
 
 ```json
 {
   "paymentId": 1,
   "orderId": 1,
+  "provider": "midtrans",
   "method": "BCA",
   "methodLabel": "Virtual Account BCA",
-  "vaNumber": "88081793688754321",
+  "vaNumber": "12345678901",
+  "billerCode": null,
   "amount": 267000,
   "expiresAt": "2026-01-02T00:00:00.000Z",
   "status": "pending",

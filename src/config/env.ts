@@ -102,4 +102,8 @@ export const env = Object.freeze({
     'x-biteship-webhook-secret',
   ),
   BITESHIP_WEBHOOK_SECRET: readOptional('BITESHIP_WEBHOOK_SECRET'),
+  MIDTRANS_SERVER_KEY: readOptional('MIDTRANS_SERVER_KEY'),
+  MIDTRANS_CLIENT_KEY: readOptional('MIDTRANS_CLIENT_KEY'),
+  MIDTRANS_IS_PRODUCTION: readBoolean('MIDTRANS_IS_PRODUCTION'),
+  MIDTRANS_BASE_URL: readOptional('MIDTRANS_BASE_URL'),
 });

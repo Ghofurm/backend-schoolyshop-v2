@@ -6,6 +6,11 @@ import type { CreatePaymentInput } from '../schemas/payments.schema.js';
 import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { cancelOrderForExpiry, expirePendingOrders } from './orders.service.js';
+import {
+  chargeMidtrans,
+  isMidtransEnabled,
+  isMidtransProductionEnabled,
+} from './midtrans.service.js';
 
 const METHODS = {
   BCA: { code: 'BCA', label: 'Virtual Account BCA', prefix: '8808' },
@@ -18,9 +23,11 @@ type PaymentMethodCode = keyof typeof METHODS;
 export interface PaymentView {
   paymentId: number;
   orderId: number;
+  provider: string;
   method: string;
   methodLabel: string;
   vaNumber: string;
+  billerCode: string | null;
   amount: number;
   expiresAt: string;
   status: Payment['status'];
@@ -32,9 +39,11 @@ function toView(payment: Payment): PaymentView {
   return {
     paymentId: payment.id,
     orderId: payment.orderId,
+    provider: payment.provider,
     method: payment.method,
     methodLabel: payment.methodLabel,
     vaNumber: payment.vaNumber,
+    billerCode: payment.billerCode,
     amount: payment.amount,
     expiresAt: payment.expiresAt.toISOString(),
     status: payment.status,
@@ -80,11 +89,7 @@ async function expirePaymentIfNeeded(payment: Payment): Promise<Payment> {
     return payment;
   }
 
-  await cancelOrderForExpiry(payment.orderId);
-  await db
-    .update(payments)
-    .set({ status: 'expired', updatedAt: new Date() })
-    .where(and(eq(payments.id, payment.id), eq(payments.status, 'pending')));
+  await markPaymentExpired(payment.id);
 
   const [updated] = await db
     .select()
@@ -93,6 +98,24 @@ async function expirePaymentIfNeeded(payment: Payment): Promise<Payment> {
     .limit(1);
 
   return updated ?? payment;
+}
+
+export async function markPaymentExpired(paymentId: number): Promise<void> {
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.id, paymentId))
+    .limit(1);
+
+  if (!payment || payment.status !== 'pending') {
+    return;
+  }
+
+  await cancelOrderForExpiry(payment.orderId);
+  await db
+    .update(payments)
+    .set({ status: 'expired', updatedAt: new Date() })
+    .where(and(eq(payments.id, paymentId), eq(payments.status, 'pending')));
 }
 
 export async function createPayment(
@@ -139,6 +162,65 @@ export async function createPayment(
   }
 
   const method = resolveMethod(input.method);
+
+  if (isMidtransEnabled()) {
+    const externalOrderId = `SCH-${currentOrder.id}-${Date.now()}`;
+    // shortcut: Midtrans charge happens before the DB insert; a DB failure can leave
+    // an orphan Midtrans transaction. Add reconciliation if this becomes frequent.
+    const charge = await chargeMidtrans({
+      externalOrderId,
+      amount: currentOrder.total,
+      method: method.code,
+      customer: {
+        name: currentOrder.buyerName,
+        email: currentOrder.buyerEmail,
+        phone: currentOrder.buyerPhone,
+      },
+    });
+
+    try {
+      const [payment] = await db
+        .insert(payments)
+        .values({
+          orderId: currentOrder.id,
+          userId,
+          provider: 'midtrans',
+          externalOrderId,
+          externalId: charge.externalId,
+          method: method.code,
+          methodLabel: charge.methodLabel,
+          vaNumber: charge.vaNumber,
+          billerCode: charge.billerCode,
+          amount: currentOrder.total,
+          expiresAt: charge.expiresAt,
+        })
+        .returning();
+
+      if (!payment) {
+        throw new Error('Failed to create payment');
+      }
+
+      await db
+        .update(orders)
+        .set({
+          paymentStatus: 'pending',
+          paymentMethod: charge.methodLabel,
+          expiresAt: charge.expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, currentOrder.id));
+
+      return toView(payment);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new AppError(409, 'Pesanan sudah memiliki pembayaran aktif', {
+          code: 'CONFLICT',
+        });
+      }
+
+      throw error;
+    }
+  }
 
   try {
     const [payment] = await db
@@ -192,7 +274,7 @@ export async function getPayment(userId: number, paymentId: number): Promise<Pay
 }
 
 export async function simulatePayment(userId: number, paymentId: number): Promise<PaymentView> {
-  if (env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production' || isMidtransProductionEnabled()) {
     throw new AppError(404, 'Pembayaran tidak ditemukan');
   }
 
