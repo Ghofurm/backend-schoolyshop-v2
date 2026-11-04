@@ -248,7 +248,7 @@ export async function markPaid(paymentId: number): Promise<PaymentView> {
     const [order] = await tx
       .update(orders)
       .set({
-        status: 'Diproses',
+        status: 'Menunggu Verifikasi',
         paymentStatus: 'paid',
         paymentMethod: payment.methodLabel,
         updatedAt: new Date(),

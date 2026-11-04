@@ -18,6 +18,7 @@ import {
   type OrderStatus,
   type PaymentStatus,
   type SellerRole,
+  type VerificationDecision,
 } from '../db/schema.js';
 import type { CheckoutInput, OrderListQuery } from '../schemas/orders.schema.js';
 import { AppError } from '../utils/httpError.js';
@@ -28,11 +29,12 @@ const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 // Receive closes an order from any still-active status until the payment/shipment
 // flows land; final states cannot be changed again.
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  'Menunggu Pembayaran': ['Diproses', 'Dibatalkan', 'Selesai'],
-  Diproses: ['Dikirim', 'Selesai'],
+  'Menunggu Pembayaran': ['Menunggu Verifikasi', 'Diproses', 'Dibatalkan', 'Selesai'],
+  'Menunggu Verifikasi': ['Diproses', 'Dibatalkan', 'Selesai'],
+  Diproses: ['Dikirim', 'Selesai', 'Dibatalkan'],
   Dikirim: ['Selesai', 'Dalam Pengembalian'],
-  'Dalam Pengembalian': ['Selesai'],
-  Selesai: [],
+  'Dalam Pengembalian': ['Selesai', 'Dibatalkan'],
+  Selesai: ['Dalam Pengembalian'],
   Dibatalkan: [],
 };
 
@@ -91,6 +93,9 @@ export interface OrderView {
   };
   items: OrderItemView[];
   sellers: SellerSummary[];
+  verifiedAt: string | null;
+  verificationDecision: VerificationDecision | null;
+  verificationReason: string | null;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
@@ -176,6 +181,9 @@ function toView(order: Order, items: OrderItem[]): OrderView {
     },
     items: items.map(toItemView),
     sellers,
+    verifiedAt: order.verifiedAt?.toISOString() ?? null,
+    verificationDecision: order.verificationDecision,
+    verificationReason: order.verificationReason,
     expiresAt: order.expiresAt.toISOString(),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
@@ -329,6 +337,20 @@ export async function getOrder(userId: number, orderId: number): Promise<OrderVi
     .orderBy(asc(orderItems.id));
 
   return toView(order, items);
+}
+
+export async function getOrderForAdmin(orderId: number): Promise<OrderView> {
+  const [order] = await db
+    .select({ userId: orders.userId })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!order) {
+    throw new AppError(404, 'Pesanan tidak ditemukan');
+  }
+
+  return getOrder(order.userId, orderId);
 }
 
 export async function createCheckout(

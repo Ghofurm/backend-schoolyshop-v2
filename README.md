@@ -444,7 +444,7 @@ Alur lokal tanpa payment gateway/ongkir nyata: keranjang + alamat + tarif statis
 | `POST` | `/orders/:id/receive` | Konfirmasi diterima → `Selesai`; pesanan final ditolak 422 |
 | `GET` | `/orders/:id/invoice` | Invoice dari snapshot checkout |
 
-Status pesanan: `Menunggu Pembayaran`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. `Dibatalkan` adalah tambahan backend untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
+Status pesanan: `Menunggu Pembayaran`, `Menunggu Verifikasi`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. Setelah pembayaran lunas, order masuk `Menunggu Verifikasi` sampai admin memutuskan; approve → `Diproses`, reject → `Dibatalkan`. `Dibatalkan` juga dipakai untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
 
 Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
 
@@ -476,7 +476,7 @@ Pembayaran memakai VA lokal dengan bentuk respons yang disiapkan sama seperti pa
 | --- | --- | --- |
 | `POST` | `/payments` | Body `{ orderId, method }`; membuat VA dan mengubah order `paymentStatus` menjadi `pending`; 201 |
 | `GET` | `/payments/:id` | Status + data VA; otomatis `expired` bila lewat `expiresAt` |
-| `POST` | `/payments/:id/simulate` | Khusus development: menandai VA lunas, payment `paid`, order `Menunggu Pembayaran → Diproses` |
+| `POST` | `/payments/:id/simulate` | Khusus development: menandai VA lunas, payment `paid`, order `Menunggu Pembayaran → Menunggu Verifikasi` |
 
 Aturan:
 
@@ -673,6 +673,39 @@ Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `in
 | `PATCH` | `/admin/sellers/:id` | Ubah data penjual |
 
 Nomor KK/NIK disimpan apa adanya dan hanya dapat diakses lewat endpoint admin; masking tampilan dilakukan frontend. Belum ada endpoint hapus penjual.
+
+## Admin — Pesanan & Retur
+
+Semua endpoint butuh admin (`requireAdmin`).
+
+### Pesanan
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/orders` | Semua pesanan; filter `paymentStatus`, `orderStatus`; cari `search`/`q` (ID/nama/email pembeli); pagination + ringkasan per status |
+| `GET` | `/admin/orders/:id` | Detail pembeli, pembayaran, item, ringkasan biaya, status, hasil verifikasi |
+| `POST` | `/admin/orders/:id/verify` | Body `{ decision: "approve" \| "reject", reason? }`; `reason` wajib saat reject |
+
+Verifikasi hanya untuk order `Menunggu Verifikasi`, sudah `paid`, dan belum diverifikasi; selain itu 422.
+
+- **Approve** → order `Diproses`, `verifiedAt` dan keputusan disimpan; shipment tetap dibuat terpisah.
+- **Reject** → order `Dibatalkan`, `paymentStatus` menjadi `refunded`, stok varian dikembalikan, alasan tersimpan di `verificationReason` dan terlihat pembeli di detail pesanan.
+- Ringkasan daftar memakai `summary.byStatus` berisi jumlah semua status (termasuk `Dibatalkan` dan `Menunggu Verifikasi`).
+
+### Retur
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/returns` | Semua retur; filter `status`, cari pembeli/ID pesanan/produk/alasan; pagination + ringkasan per status |
+| `GET` | `/admin/returns/:id` | Detail pembeli, order, item, alasan, foto, metode refund |
+| `POST` | `/admin/returns/:id/approve` | Body `{ refundMethod, adminNote? }`; set status `Disetujui` |
+| `POST` | `/admin/returns/:id/reject` | Body `{ adminNote }` wajib; set status `Ditolak` |
+
+- Status retur: `Menunggu Keputusan`, `Disetujui`, `Ditolak`.
+- Approve mengisi `decisionAt`/`refundMethod`/`adminNote` dan mengubah order terkait menjadi `Selesai` (pilihan yang ditetapkan; refund uang nyata menyusul).
+- Reject mengisi `decisionAt`/`adminNote`; status order tidak diubah.
+- Retur yang sudah diputuskan tidak bisa diputus lagi → 409.
+- `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, dan `adminNote`.
 
 ## Scripts
 
