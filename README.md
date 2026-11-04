@@ -155,7 +155,7 @@ Hasil build TypeScript disimpan di folder `dist/`.
 
 ## Dokumentasi API (Swagger)
 
-Swagger UI tersedia di `http://localhost:3000/docs` dan spec JSON di `http://localhost:3000/docs/openapi.json`. Dokumentasi bisa dibuka tanpa login.
+Swagger UI tersedia di `http://localhost:3000/docs` (URL kanonik `/docs`) dan spec JSON di `http://localhost:3000/docs/openapi.json`. Path lama `/docs/api` dialihkan ke `/docs`. Dokumentasi bisa dibuka tanpa login.
 
 Pendekatan yang dipakai: **spec-first** dalam bentuk objek OpenAPI 3 di `src/docs/openapi.ts`. Alasannya, endpoint sudah banyak dan tersebar di banyak modul; code-first membutuhkan anotasi JSDoc/registry tambahan di hampir semua route dan tetap perlu mendefinisikan skema respons secara manual. Satu objek spec lebih mudah ditinjau dan dijaga konsisten, dengan aturan pembaruan di bawah.
 
