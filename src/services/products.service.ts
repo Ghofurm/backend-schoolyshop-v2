@@ -92,7 +92,7 @@ function toSummary(row: ProductRow): ProductSummary {
 }
 
 function buildFilters(query: ProductListQuery): SQL | undefined {
-  const filters: SQL[] = [];
+  const filters: SQL[] = [eq(products.status, 'Aktif')];
 
   if (query.q) {
     const pattern = `%${query.q}%`;
@@ -191,7 +191,12 @@ export async function listProducts(
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail> {
-  const [row] = await findProductRows(eq(products.slug, slug), [asc(products.id)], 1, 0);
+  const [row] = await findProductRows(
+    and(eq(products.slug, slug), eq(products.status, 'Aktif')),
+    [asc(products.id)],
+    1,
+    0,
+  );
 
   if (!row) {
     throw new AppError(404, 'Produk tidak ditemukan');
@@ -219,7 +224,7 @@ export async function getRelatedProducts(id: number, limit: number): Promise<Pro
   const [product] = await db
     .select({ id: products.id, categoryId: products.categoryId })
     .from(products)
-    .where(eq(products.id, id))
+    .where(and(eq(products.id, id), eq(products.status, 'Aktif')))
     .limit(1);
 
   if (!product) {
@@ -227,7 +232,11 @@ export async function getRelatedProducts(id: number, limit: number): Promise<Pro
   }
 
   const sameCategory = await findProductRows(
-    and(eq(products.categoryId, product.categoryId), ne(products.id, product.id)),
+    and(
+      eq(products.categoryId, product.categoryId),
+      ne(products.id, product.id),
+      eq(products.status, 'Aktif'),
+    ),
     [asc(products.id)],
     limit,
     0,
@@ -238,7 +247,11 @@ export async function getRelatedProducts(id: number, limit: number): Promise<Pro
   }
 
   const others = await findProductRows(
-    and(ne(products.id, product.id), ne(products.categoryId, product.categoryId)),
+    and(
+      ne(products.id, product.id),
+      ne(products.categoryId, product.categoryId),
+      eq(products.status, 'Aktif'),
+    ),
     [asc(products.id)],
     limit - sameCategory.length,
     0,

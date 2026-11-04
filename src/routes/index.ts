@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { adminCategoriesRouter } from './adminCategories.routes.js';
+import { adminProductsRouter } from './adminProducts.routes.js';
+import { adminSellersRouter } from './adminSellers.routes.js';
 import { adminShipmentsRouter } from './adminShipments.routes.js';
 import { authRouter } from './auth.routes.js';
 import { cartRouter } from './cart.routes.js';
@@ -30,3 +33,6 @@ routes.use('/returns', returnsRouter);
 routes.use('/reviews', reviewsRouter);
 routes.use('/shipments', shipmentsRouter);
 routes.use('/admin/shipments', adminShipmentsRouter);
+routes.use('/admin/products', adminProductsRouter);
+routes.use('/admin/categories', adminCategoriesRouter);
+routes.use('/admin/sellers', adminSellersRouter);

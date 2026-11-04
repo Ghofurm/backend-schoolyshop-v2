@@ -617,6 +617,63 @@ Catatan:
 }
 ```
 
+## Admin — Katalog
+
+Semua endpoint di bagian ini butuh admin (`requireAdmin`). Produk berstatus `Nonaktif` tidak tampil di `GET /products`, detail publik, related, maupun hitungan kategori publik.
+
+### Produk
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/products` | Daftar produk + stok, status, seller, kategori, varian; filter `search`/`q`, `category`, `status`; pagination |
+| `POST` | `/admin/products` | Buat produk + varian; slug dibuat dari nama dan dibuat unik |
+| `PATCH` | `/admin/products/:id` | Ubah data produk/varian |
+| `DELETE` | `/admin/products/:id` | Hapus produk; 409 jika sudah punya riwayat pesanan |
+| `POST` | `/admin/products/:id/image` | Upload gambar (multipart field `image`, maks 5 MB, JPEG/PNG/WebP) |
+
+Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `inactive`, `lowStock` (total stok ≤ 5), dan `new` (dibuat ≤ 30 hari). Contoh body create:
+
+```json
+{
+  "name": "Lampu Belajar LED",
+  "description": "Lampu belajar hemat energi",
+  "price": 99000,
+  "tag": "Lampu",
+  "categoryId": 1,
+  "sellerId": 1,
+  "featured": true,
+  "status": "Aktif",
+  "variants": [
+    { "size": "S", "stock": 3, "priceAdjustment": 0 },
+    { "size": "M", "stock": 2, "priceAdjustment": 5000 }
+  ]
+}
+```
+
+- `tag` opsional (default `Umum`).
+- Jika `variants` tidak dikirim, `stock` dipakai untuk membuat satu varian `All Size`.
+- Pada PATCH, varian dengan `id` di-update, varian tanpa `id` dibuat baru; varian yang tidak dikirim tetap ada. `stock` hanya boleh dipakai jika produk punya 0/1 varian.
+- `image` di respons berupa path publik (`/uploads/products/...`) dan dapat juga diisi langsung lewat URL/path pada create/update.
+
+### Kategori
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/categories` | Kategori + `description` + `productCount` |
+| `POST` | `/admin/categories` | Body `{ name, description? }`; slug dibuat dari nama |
+| `PATCH` | `/admin/categories/:id` | Ubah nama/deskripsi; slug ikut diperbarui bila nama berubah |
+| `DELETE` | `/admin/categories/:id` | 409 jika masih dipakai produk |
+
+### Penjual
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/sellers` | Penjual + `productCount` + ringkasan `total`/`guru`/`siswa`/`karyawan`; filter `search`/`q`, `role`; pagination |
+| `POST` | `/admin/sellers` | Body `{ name, role, business?, type?, kk?, address?, whatsapp? }` |
+| `PATCH` | `/admin/sellers/:id` | Ubah data penjual |
+
+Nomor KK/NIK disimpan apa adanya dan hanya dapat diakses lewat endpoint admin; masking tampilan dilakukan frontend. Belum ada endpoint hapus penjual.
+
 ## Scripts
 
 | Script | Deskripsi |
