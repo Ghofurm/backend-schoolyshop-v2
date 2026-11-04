@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { adminShipmentsRouter } from './adminShipments.routes.js';
 import { authRouter } from './auth.routes.js';
 import { cartRouter } from './cart.routes.js';
 import { categoriesRouter } from './categories.routes.js';
@@ -9,6 +10,7 @@ import { paymentsRouter } from './payments.routes.js';
 import { productsRouter } from './products.routes.js';
 import { returnsRouter } from './returns.routes.js';
 import { reviewsRouter } from './reviews.routes.js';
+import { shipmentsRouter } from './shipments.routes.js';
 import { shippingRouter } from './shipping.routes.js';
 import { usersRouter } from './users.routes.js';
 
@@ -26,3 +28,5 @@ routes.use('/orders', ordersRouter);
 routes.use('/payments', paymentsRouter);
 routes.use('/returns', returnsRouter);
 routes.use('/reviews', reviewsRouter);
+routes.use('/shipments', shipmentsRouter);
+routes.use('/admin/shipments', adminShipmentsRouter);

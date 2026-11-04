@@ -8,7 +8,9 @@ import {
   payments,
   products,
   sellers,
+  shipments,
   shippingRates,
+  trackingEvents,
   users,
   variants,
   type Order,
@@ -533,10 +535,42 @@ export async function receiveOrder(userId: number, orderId: number): Promise<Ord
 
   assertTransition(order.status, 'Selesai');
 
-  await db
-    .update(orders)
-    .set({ status: 'Selesai', updatedAt: new Date() })
-    .where(and(eq(orders.id, orderId), eq(orders.userId, userId)));
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(orders)
+      .set({ status: 'Selesai', updatedAt: now })
+      .where(
+        and(
+          eq(orders.id, orderId),
+          eq(orders.userId, userId),
+          eq(orders.status, order.status),
+        ),
+      )
+      .returning({ id: orders.id });
+
+    if (!updated) {
+      throw new AppError(422, 'Status pesanan berubah', {
+        details: { fields: { status: 'Silakan muat ulang pesanan' } },
+      });
+    }
+
+    const [shipment] = await tx
+      .update(shipments)
+      .set({ status: 'Selesai', updatedAt: now })
+      .where(eq(shipments.orderId, orderId))
+      .returning({ id: shipments.id });
+
+    if (shipment) {
+      await tx.insert(trackingEvents).values({
+        shipmentId: shipment.id,
+        status: 'Selesai',
+        location: 'Tujuan',
+        description: 'Paket diterima pembeli',
+        occurredAt: now,
+      });
+    }
+  });
 
   return getOrder(userId, orderId);
 }
