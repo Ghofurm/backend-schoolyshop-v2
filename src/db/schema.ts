@@ -291,6 +291,10 @@ export const payments = pgTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    provider: varchar('provider', { length: 20 }).notNull().default('local'),
+    externalOrderId: varchar('external_order_id', { length: 100 }),
+    externalId: varchar('external_id', { length: 100 }),
+    billerCode: varchar('biller_code', { length: 20 }),
     method: varchar('method', { length: 20 }).notNull(),
     methodLabel: varchar('method_label', { length: 80 }).notNull(),
     vaNumber: varchar('va_number', { length: 30 }).notNull(),
@@ -304,6 +308,7 @@ export const payments = pgTable(
   (table) => [
     index('payments_user_id_idx').on(table.userId),
     index('payments_order_id_idx').on(table.orderId),
+    uniqueIndex('payments_external_order_unique').on(table.externalOrderId),
     uniqueIndex('payments_pending_order_unique')
       .on(table.orderId)
       .where(sql`${table.status} = 'pending'`),
