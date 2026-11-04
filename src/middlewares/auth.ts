@@ -43,6 +43,31 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   }
 };
 
+export const optionalAuth: RequestHandler = async (req, _res, next) => {
+  try {
+    const token = getSessionToken(req.cookies);
+
+    if (token) {
+      const sessionUser = await findSessionUser(token);
+
+      if (sessionUser && sessionUser.status === 'active') {
+        req.user = {
+          id: sessionUser.id,
+          name: sessionUser.name,
+          email: sessionUser.email,
+          phone: sessionUser.phone,
+          role: sessionUser.role,
+          createdAt: sessionUser.createdAt,
+        };
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const requireAdmin: RequestHandler = (req, _res, next) => {
   if (!req.user) {
     next(new AppError(401, 'Silakan login terlebih dahulu'));

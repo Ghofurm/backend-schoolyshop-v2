@@ -12,7 +12,9 @@ export const adminShipmentListQuerySchema = paginationQuerySchema.extend({
 export const createShipmentSchema = z
   .object({
     orderId: z.coerce.number().int().positive(),
-    shippingRateId: z.coerce.number().int().positive().optional(),
+    shippingRateId: z
+      .union([z.coerce.number().int().positive(), z.string().trim().min(1).max(100)])
+      .optional(),
     courier: z.string().trim().min(1).max(80).optional(),
     service: z.string().trim().min(1).max(80).optional(),
   })

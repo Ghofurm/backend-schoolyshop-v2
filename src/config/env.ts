@@ -57,6 +57,12 @@ function readList(name: string, fallback: string[]): string[] {
   return items.length > 0 ? items : fallback;
 }
 
+function readOptional(name: string, fallback = ''): string {
+  const value = process.env[name];
+
+  return value === undefined || value.trim() === '' ? fallback : value.trim();
+}
+
 function readBoolean(name: string, fallback = false): boolean {
   const value = process.env[name];
 
@@ -83,4 +89,17 @@ export const env = Object.freeze({
   DB_PASSWORD: requireEnv('DB_PASSWORD'),
   DB_NAME: requireEnv('DB_NAME'),
   DB_SSL: readBoolean('DB_SSL'),
+  BITESHIP_API_KEY: readOptional('BITESHIP_API_KEY'),
+  BITESHIP_BASE_URL: readOptional('BITESHIP_BASE_URL', 'https://api.biteship.com'),
+  BITESHIP_ORIGIN_AREA_ID: readOptional('BITESHIP_ORIGIN_AREA_ID'),
+  BITESHIP_ORIGIN_POSTAL_CODE: readOptional('BITESHIP_ORIGIN_POSTAL_CODE'),
+  BITESHIP_ORIGIN_CONTACT_NAME: readOptional('BITESHIP_ORIGIN_CONTACT_NAME', 'Koperasi Sekolah'),
+  BITESHIP_ORIGIN_CONTACT_PHONE: readOptional('BITESHIP_ORIGIN_CONTACT_PHONE', '081200000000'),
+  BITESHIP_ORIGIN_ADDRESS: readOptional('BITESHIP_ORIGIN_ADDRESS', 'Koperasi Sekolah'),
+  BITESHIP_COURIERS: readList('BITESHIP_COURIERS', ['jne', 'sicepat', 'jnt', 'anteraja']),
+  BITESHIP_WEBHOOK_HEADER_KEY: readOptional(
+    'BITESHIP_WEBHOOK_HEADER_KEY',
+    'x-biteship-webhook-secret',
+  ),
+  BITESHIP_WEBHOOK_SECRET: readOptional('BITESHIP_WEBHOOK_SECRET'),
 });

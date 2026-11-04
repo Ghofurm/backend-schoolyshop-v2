@@ -21,6 +21,7 @@ import { reviewsRouter } from './reviews.routes.js';
 import { shipmentsRouter } from './shipments.routes.js';
 import { shippingRouter } from './shipping.routes.js';
 import { usersRouter } from './users.routes.js';
+import { webhooksRouter } from './webhooks.routes.js';
 
 export const routes = Router();
 
@@ -46,3 +47,4 @@ routes.use('/admin/returns', adminReturnsRouter);
 routes.use('/admin/users', adminUsersRouter);
 routes.use('/admin/dashboard', adminDashboardRouter);
 routes.use('/admin/reports', adminReportsRouter);
+routes.use('/webhooks', webhooksRouter);

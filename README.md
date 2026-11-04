@@ -76,6 +76,21 @@ Variabel yang tersedia:
 | `DB_NAME` | Ya | - | Nama database |
 | `DB_SSL` | Tidak | `false` | Aktifkan SSL koneksi database |
 
+Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data lokal):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `BITESHIP_API_KEY` | Tidak | - | Aktifkan integrasi Biteship bila diisi |
+| `BITESHIP_BASE_URL` | Tidak | `https://api.biteship.com` | Base URL API Biteship |
+| `BITESHIP_ORIGIN_AREA_ID` | Tidak | - | Area ID asal pengiriman (disarankan) |
+| `BITESHIP_ORIGIN_POSTAL_CODE` | Tidak | - | Alternatif origin jika area ID kosong |
+| `BITESHIP_ORIGIN_CONTACT_NAME` | Tidak | `Koperasi Sekolah` | Nama kontak asal |
+| `BITESHIP_ORIGIN_CONTACT_PHONE` | Tidak | `081200000000` | Telepon kontak asal |
+| `BITESHIP_ORIGIN_ADDRESS` | Tidak | `Koperasi Sekolah` | Alamat asal |
+| `BITESHIP_COURIERS` | Tidak | `jne,sicepat,jnt,anteraja` | Daftar kode kurir, dipisah koma |
+| `BITESHIP_WEBHOOK_HEADER_KEY` | Tidak | `x-biteship-webhook-secret` | Nama header signature webhook |
+| `BITESHIP_WEBHOOK_SECRET` | Tidak | - | Nilai secret header webhook; webhook ditolak bila kosong/tidak cocok |
+
 Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi.
 
 ## Setup Database
@@ -571,7 +586,7 @@ Rating 1–5, komentar opsional maksimal 1000 karakter. Duplikat → 409 `CONFLI
 
 ## Pengiriman & Pelacakan
 
-Pengiriman lokal satu resi per pesanan. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`.
+Default-nya pengiriman lokal satu resi per pesanan. Jika `BITESHIP_API_KEY` diisi, tarif, pencarian area, pembuatan resi, dan pelacakan memakai Biteship; tanpa key semuanya kembali ke data lokal. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`.
 
 Endpoint admin (`requireAdmin`):
 
@@ -579,7 +594,7 @@ Endpoint admin (`requireAdmin`):
 | --- | --- | --- |
 | `GET` | `/admin/shipments` | Daftar order siap kirim + shipment; filter `status`, `courier`, cari `search`/`q` (resi/nama penerima), pagination |
 | `POST` | `/admin/shipments` | Body `{ orderId, shippingRateId }` atau `{ orderId, courier, service? }`; 201 |
-| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total |
+| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total, `labelUrl` |
 | `GET` | `/admin/shipments/:id/tracking` | Riwayat event, terbaru dulu |
 
 Endpoint user (butuh login):
@@ -588,12 +603,29 @@ Endpoint user (butuh login):
 | --- | --- | --- |
 | `GET` | `/shipments/track?q=` | Cari dengan resi atau ID pesanan; hanya shipment milik sendiri, admin bebas |
 
-Catatan:
+Endpoint publik tambahan:
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/shipping/rates` | Tarif lokal, atau tarif Biteship bila key aktif + `destinationAreaId` |
+| `GET` | `/shipping/areas?q=` | Proxy pencarian area Biteship; tanpa key mengembalikan daftar kosong (`source: local`) |
+| `POST` | `/webhooks/biteship` | Webhook status Biteship, diverifikasi lewat header key/secret dari env |
+
+Mode Biteship:
+
+- Berat paket dihitung dari `products.weight` (gram, default `1000`) × qty keranjang; `weight` query pada `/shipping/rates` juga diterima.
+- Produk admin bisa mengisi `weight`; nilai disimpan per produk dan disalin ke `order_items` saat checkout.
+- Respons tarif Biteship memakai `id` string (mis. `jne-reg`), bukan ID numerik lokal; checkout menerima keduanya.
+- Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. Order tetap `Diproses → Dikirim`.
+- Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status `delivered` menandai shipment `Selesai`. Event duplikat beruntun diabaikan.
+- Gangguan/timeout Biteship → 502 `SERVER`, tanpa menulis data lokal setengah jadi.
+
+Catatan lokal:
 
 - Status daftar: `Siap Dikirim` (order `Diproses` belum punya shipment), `Dikirim`, `Selesai`. Satu order hanya boleh punya satu shipment.
-- Resi dibuat backend dengan pola prefix kurir + timestamp + ID shipment, unik dan terurut waktu (contoh `SC202611041530000007`).
+- Tanpa key, resi dibuat backend dengan pola prefix kurir + timestamp + ID shipment, unik dan terurut waktu (contoh `SC202611041530000007`).
 - `shippingRateId` mengacu ke `GET /shipping/rates`; alternatif `courier` menerima nama seperti `JNE REG`/`SiCepat REG` dan dicocokkan ke tarif.
-- Event awal: `Dikirim` di `Koperasi Sekolah`; saat diterima: `Selesai` di `Tujuan`.
+- Event awal: `Dikirim` di `Koperasi Sekolah` (lokal) atau `Biteship`; saat diterima: `Selesai` di `Tujuan`.
 - Bentuk respons tracking: `orderId`, `orderStatus`, `courier`, `service`, `trackingNumber`, `status`, `recipientName`, `shippingAddress`, `history[]` (`status`, `location`, `description`, `occurredAt`).
 
 ```json
@@ -639,6 +671,7 @@ Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `in
   "description": "Lampu belajar hemat energi",
   "price": 99000,
   "tag": "Lampu",
+  "weight": 1000,
   "categoryId": 1,
   "sellerId": 1,
   "featured": true,
@@ -651,6 +684,7 @@ Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `in
 ```
 
 - `tag` opsional (default `Umum`).
+- `weight` dalam gram, opsional (default `1000`); dipakai untuk tarif Biteship dan snapshot item pesanan.
 - Jika `variants` tidak dikirim, `stock` dipakai untuk membuat satu varian `All Size`.
 - Pada PATCH, varian dengan `id` di-update, varian tanpa `id` dibuat baru; varian yang tidak dikirim tetap ada. `stock` hanya boleh dipakai jika produk punya 0/1 varian.
 - `image` di respons berupa path publik (`/uploads/products/...`) dan dapat juga diisi langsung lewat URL/path pada create/update.
