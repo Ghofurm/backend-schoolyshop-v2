@@ -707,6 +707,47 @@ Verifikasi hanya untuk order `Menunggu Verifikasi`, sudah `paid`, dan belum dive
 - Retur yang sudah diputuskan tidak bisa diputus lagi → 409.
 - `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, dan `adminNote`.
 
+## Admin — Dashboard, User & Laporan
+
+Semua endpoint butuh admin (`requireAdmin`).
+
+### Dashboard
+
+`GET /admin/dashboard/summary?startDate=&endDate=` — angka dari tabel nyata:
+
+- `totalProducts`: seluruh produk.
+- `totalOrders`: seluruh pesanan.
+- `totalUsers`: seluruh user.
+- `totalTransactions`: pesanan dengan `paymentStatus=paid` (semua waktu).
+- `grossRevenue`: total `orders.total` pesanan lunas pada periode.
+- `totalRefunds`: nilai item retur berstatus `Disetujui` dengan `decisionAt` pada periode.
+- `totalRevenue`: `grossRevenue - totalRefunds`.
+- `recentOrders`: 5 pesanan terbaru + produk pertama/jumlah item.
+
+Periode default = bulan berjalan, timezone `Asia/Jakarta`; filter memakai format `YYYY-MM-DD` dan dihitung dari `orders.createdAt` (bukan `paidAt`). Respons menyertakan `period`.
+
+### User
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/users` | Daftar user; cari nama/email, filter `role`/`status`, pagination |
+| `GET` | `/admin/users/:id` | Profil + ringkasan aktivitas + 5 pesanan terbaru |
+
+Ringkasan aktivitas: `totalOrders`, `completedOrders` (`Selesai`), `processingOrders` (semua status non-final selain `Selesai`/`Dibatalkan`), `cancelledOrders`, dan `totalSpent` (pesanan `paid`).
+
+### Laporan penjualan
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/reports/sales?startDate=&endDate=&sellerId=` | Agregat semua penjual; filter tanggal wajib didukung, `sellerId` opsional |
+| `GET` | `/admin/reports/sales/:sellerId?startDate=&endDate=` | Breakdown produk per penjual |
+
+- Hanya order `paid` yang dihitung; order `Dibatalkan`/belum bayar/`refunded` tidak masuk.
+- `total` memakai subtotal item (bukan ongkir); `refund` = nilai item retur disetujui; `net = total - refund`; `orderCount` = jumlah order unik.
+- `startDate`/`endDate` format `YYYY-MM-DD`, timezone `Asia/Jakarta`, default bulan berjalan. `startDate > endDate` → 422.
+- Daftar menyertakan semua penjual (nilai 0 bila tidak ada penjualan) beserta `totals`; detail berisi `seller`, `period`, `products[]`, dan `totals`.
+- Ekspor CSV tetap dibuat di frontend, tidak ada endpoint ekspor.
+
 ## Scripts
 
 | Script | Deskripsi |

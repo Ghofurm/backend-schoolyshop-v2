@@ -85,6 +85,13 @@
       "when": 1793797605680,
       "tag": "0011_shallow_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793798266745,
+      "tag": "0012_colorful_smasher",
+      "breakpoints": true
     }
   ]
 }
