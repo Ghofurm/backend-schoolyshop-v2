@@ -569,6 +569,54 @@ Body menerima `{ "reviews": [...] }` (juga array langsung atau `{ "items": [...]
 
 Rating 1–5, komentar opsional maksimal 1000 karakter. Duplikat → 409 `CONFLICT`; pesanan belum `Selesai` atau produk bukan bagian pesanan → 422.
 
+## Pengiriman & Pelacakan
+
+Pengiriman lokal satu resi per pesanan. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`.
+
+Endpoint admin (`requireAdmin`):
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/admin/shipments` | Daftar order siap kirim + shipment; filter `status`, `courier`, cari `search`/`q` (resi/nama penerima), pagination |
+| `POST` | `/admin/shipments` | Body `{ orderId, shippingRateId }` atau `{ orderId, courier, service? }`; 201 |
+| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total |
+| `GET` | `/admin/shipments/:id/tracking` | Riwayat event, terbaru dulu |
+
+Endpoint user (butuh login):
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/shipments/track?q=` | Cari dengan resi atau ID pesanan; hanya shipment milik sendiri, admin bebas |
+
+Catatan:
+
+- Status daftar: `Siap Dikirim` (order `Diproses` belum punya shipment), `Dikirim`, `Selesai`. Satu order hanya boleh punya satu shipment.
+- Resi dibuat backend dengan pola prefix kurir + timestamp + ID shipment, unik dan terurut waktu (contoh `SC202611041530000007`).
+- `shippingRateId` mengacu ke `GET /shipping/rates`; alternatif `courier` menerima nama seperti `JNE REG`/`SiCepat REG` dan dicocokkan ke tarif.
+- Event awal: `Dikirim` di `Koperasi Sekolah`; saat diterima: `Selesai` di `Tujuan`.
+- Bentuk respons tracking: `orderId`, `orderStatus`, `courier`, `service`, `trackingNumber`, `status`, `recipientName`, `shippingAddress`, `history[]` (`status`, `location`, `description`, `occurredAt`).
+
+```json
+{
+  "orderId": 1,
+  "orderStatus": "Dikirim",
+  "courier": "SiCepat",
+  "service": "SIUNTUNG",
+  "trackingNumber": "SC202611041530000001",
+  "status": "Dikirim",
+  "recipientName": "Nama Penerima",
+  "shippingAddress": "Jl. Mawar No. 1, Bandung Wetan, Bandung, Jawa Barat",
+  "history": [
+    {
+      "status": "Dikirim",
+      "location": "Koperasi Sekolah",
+      "description": "Paket diserahkan ke SiCepat SIUNTUNG",
+      "occurredAt": "2026-11-04T08:30:00.000Z"
+    }
+  ]
+}
+```
+
 ## Scripts
 
 | Script | Deskripsi |

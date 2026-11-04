@@ -36,6 +36,12 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const RETURN_STATUSES = ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] as const;
 export type ReturnStatus = (typeof RETURN_STATUSES)[number];
 
+export const SHIPMENT_STATUSES = ['Dikirim', 'Selesai'] as const;
+export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
+
+export const ADMIN_SHIPMENT_STATUSES = ['Siap Dikirim', ...SHIPMENT_STATUSES] as const;
+export type AdminShipmentStatus = (typeof ADMIN_SHIPMENT_STATUSES)[number];
+
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 120 }).notNull(),
@@ -378,3 +384,55 @@ export const reviews = pgTable(
 );
 
 export type Review = typeof reviews.$inferSelect;
+
+export const shipments = pgTable(
+  'shipments',
+  {
+    id: serial('id').primaryKey(),
+    orderId: integer('order_id')
+      .notNull()
+      .unique()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    courierCode: varchar('courier_code', { length: 60 }).notNull(),
+    courier: varchar('courier', { length: 60 }).notNull(),
+    service: varchar('service', { length: 80 }).notNull(),
+    trackingNumber: varchar('tracking_number', { length: 60 }).notNull().unique(),
+    status: varchar('status', { length: 20 }).$type<ShipmentStatus>().notNull().default('Dikirim'),
+    recipientName: varchar('recipient_name', { length: 120 }).notNull(),
+    phone: varchar('phone', { length: 32 }).notNull(),
+    address: varchar('address', { length: 500 }),
+    areaId: varchar('area_id', { length: 64 }).notNull(),
+    district: varchar('district', { length: 120 }).notNull(),
+    city: varchar('city', { length: 120 }).notNull(),
+    province: varchar('province', { length: 120 }).notNull(),
+    postalCode: varchar('postal_code', { length: 10 }).notNull(),
+    note: varchar('note', { length: 500 }),
+    shippedAt: timestamp('shipped_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('shipments_status_idx').on(table.status),
+    index('shipments_courier_idx').on(table.courier),
+  ],
+);
+
+export type Shipment = typeof shipments.$inferSelect;
+
+export const trackingEvents = pgTable(
+  'tracking_events',
+  {
+    id: serial('id').primaryKey(),
+    shipmentId: integer('shipment_id')
+      .notNull()
+      .references(() => shipments.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 50 }).notNull(),
+    location: varchar('location', { length: 200 }).notNull(),
+    description: varchar('description', { length: 500 }).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('tracking_events_shipment_id_idx').on(table.shipmentId)],
+);
+
+export type TrackingEvent = typeof trackingEvents.$inferSelect;
