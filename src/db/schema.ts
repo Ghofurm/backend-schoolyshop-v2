@@ -242,6 +242,7 @@ export const orders = pgTable(
   (table) => [
     index('orders_user_id_idx').on(table.userId),
     index('orders_status_expires_idx').on(table.status, table.expiresAt),
+    index('orders_payment_created_idx').on(table.paymentStatus, table.createdAt),
   ],
 );
 
@@ -270,7 +271,10 @@ export const orderItems = pgTable(
     subtotal: integer('subtotal').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index('order_items_order_id_idx').on(table.orderId)],
+  (table) => [
+    index('order_items_order_id_idx').on(table.orderId),
+    index('order_items_seller_id_idx').on(table.sellerId),
+  ],
 );
 
 export type OrderItem = typeof orderItems.$inferSelect;
@@ -329,6 +333,7 @@ export const returns = pgTable(
   (table) => [
     index('returns_user_id_idx').on(table.userId),
     index('returns_order_id_idx').on(table.orderId),
+    index('returns_status_decision_idx').on(table.status, table.decisionAt),
     uniqueIndex('returns_active_order_unique')
       .on(table.orderId)
       .where(sql`${table.status} in ('Menunggu Keputusan', 'Disetujui')`),
