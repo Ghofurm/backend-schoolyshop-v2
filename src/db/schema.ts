@@ -22,6 +22,7 @@ export type SellerRole = (typeof SELLER_ROLES)[number];
 
 export const ORDER_STATUSES = [
   'Menunggu Pembayaran',
+  'Menunggu Verifikasi',
   'Diproses',
   'Dikirim',
   'Dalam Pengembalian',
@@ -29,6 +30,9 @@ export const ORDER_STATUSES = [
   'Dibatalkan',
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export const VERIFICATION_DECISIONS = ['approve', 'reject'] as const;
+export type VerificationDecision = (typeof VERIFICATION_DECISIONS)[number];
 
 export const PAYMENT_STATUSES = ['unpaid', 'pending', 'paid', 'expired', 'refunded'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
@@ -228,6 +232,9 @@ export const orders = pgTable(
     courierName: varchar('courier_name', { length: 60 }).notNull(),
     courierService: varchar('courier_service', { length: 80 }).notNull(),
     courierEta: varchar('courier_eta', { length: 120 }).notNull(),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    verificationDecision: varchar('verification_decision', { length: 20 }).$type<VerificationDecision>(),
+    verificationReason: varchar('verification_reason', { length: 500 }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
