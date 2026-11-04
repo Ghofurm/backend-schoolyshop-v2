@@ -36,7 +36,17 @@ const swaggerOptions = {
   },
 };
 
-app.get('/docs', swaggerUi.setup(openapiDocument, swaggerOptions));
+// Keep one canonical documentation URL: /docs. A <base> tag makes the
+// swagger-ui-express assets resolve under /docs even without a trailing slash.
+const swaggerHtml = swaggerUi
+  .generateHTML(openapiDocument, swaggerOptions)
+  .replace('<head>', '<head>\n  <base href="/docs/">');
+app.get('/docs', (_req, res) => {
+  res.type('html').send(swaggerHtml);
+});
+app.get('/docs/api', (_req, res) => {
+  res.redirect(301, '/docs');
+});
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument, swaggerOptions));
 app.use(routes);
 app.use(notFoundHandler);
