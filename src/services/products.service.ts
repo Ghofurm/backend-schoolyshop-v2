@@ -14,6 +14,7 @@ export interface ProductSummary {
   tag: string;
   image: string | null;
   featured: boolean;
+  weight: number;
   category: string;
   categorySlug: string;
   seller: {
@@ -45,6 +46,7 @@ const productSelection = {
   tag: products.tag,
   image: products.image,
   featured: products.featured,
+  weight: products.weight,
   categoryName: categories.name,
   categorySlug: categories.slug,
   sellerId: sellers.id,
@@ -62,6 +64,7 @@ type ProductRow = {
   tag: string;
   image: string | null;
   featured: boolean;
+  weight: number;
   categoryName: string;
   categorySlug: string;
   sellerId: number;
@@ -80,6 +83,7 @@ function toSummary(row: ProductRow): ProductSummary {
     tag: row.tag,
     image: row.image,
     featured: row.featured,
+    weight: row.weight,
     category: row.categoryName,
     categorySlug: row.categorySlug,
     seller: {

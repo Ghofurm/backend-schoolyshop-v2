@@ -50,6 +50,7 @@ export interface AdminProductView {
   tag: string;
   image: string | null;
   featured: boolean;
+  weight: number;
   status: ProductStatus;
   categoryId: number;
   categoryName: string;
@@ -73,6 +74,7 @@ interface AdminProductRow {
   tag: string;
   image: string | null;
   featured: boolean;
+  weight: number;
   status: ProductStatus;
   categoryId: number;
   categoryName: string;
@@ -94,6 +96,7 @@ const productSelection = {
   tag: products.tag,
   image: products.image,
   featured: products.featured,
+  weight: products.weight,
   status: products.status,
   categoryId: categories.id,
   categoryName: categories.name,
@@ -120,6 +123,7 @@ function toView(row: AdminProductRow, variantRows: AdminVariantView[]): AdminPro
     tag: row.tag,
     image: row.image,
     featured: row.featured,
+    weight: row.weight,
     status: row.status,
     categoryId: row.categoryId,
     categoryName: row.categoryName,
@@ -394,6 +398,7 @@ export async function createAdminProduct(input: CreateProductInput): Promise<Adm
           description: input.description,
           price: input.price,
           tag: input.tag,
+          weight: input.weight,
           image: input.image ?? null,
           featured: input.featured,
           status: input.status,

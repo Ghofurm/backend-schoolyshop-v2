@@ -108,6 +108,7 @@ export const products = pgTable(
     description: text('description').notNull(),
     price: integer('price').notNull(),
     tag: varchar('tag', { length: 60 }).notNull(),
+    weight: integer('weight').notNull().default(1000),
     image: varchar('image', { length: 500 }),
     featured: boolean('featured').notNull().default(false),
     status: varchar('status', { length: 20 }).$type<ProductStatus>().notNull().default('Aktif'),
@@ -267,6 +268,7 @@ export const orderItems = pgTable(
     sellerRole: varchar('seller_role', { length: 20 }).$type<SellerRole>().notNull(),
     unitPrice: integer('unit_price').notNull(),
     priceAdjustment: integer('price_adjustment').notNull().default(0),
+    weight: integer('weight').notNull().default(1000),
     qty: integer('qty').notNull(),
     subtotal: integer('subtotal').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -419,6 +421,10 @@ export const shipments = pgTable(
       .notNull()
       .unique()
       .references(() => orders.id, { onDelete: 'cascade' }),
+    provider: varchar('provider', { length: 20 }).notNull().default('local'),
+    biteshipOrderId: varchar('biteship_order_id', { length: 80 }),
+    biteshipTrackingId: varchar('biteship_tracking_id', { length: 80 }),
+    labelUrl: varchar('label_url', { length: 1000 }),
     courierCode: varchar('courier_code', { length: 60 }).notNull(),
     courier: varchar('courier', { length: 60 }).notNull(),
     service: varchar('service', { length: 80 }).notNull(),
@@ -440,6 +446,7 @@ export const shipments = pgTable(
   (table) => [
     index('shipments_status_idx').on(table.status),
     index('shipments_courier_idx').on(table.courier),
+    index('shipments_biteship_order_idx').on(table.biteshipOrderId),
   ],
 );
 

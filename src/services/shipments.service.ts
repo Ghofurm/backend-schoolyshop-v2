@@ -16,6 +16,12 @@ import type {
 import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { paginate, paginationOffset } from '../utils/pagination.js';
+import {
+  createBiteshipOrder,
+  getBiteshipLabelUrl,
+  isBiteshipEnabled,
+  resolveBiteshipRate,
+} from './biteship.service.js';
 import { assertTransition } from './orders.service.js';
 
 export interface AdminShipmentListItem {
@@ -229,6 +235,7 @@ export async function getAdminShipment(id: number) {
       productImage: orderItems.productImage,
       variantSize: orderItems.variantSize,
       qty: orderItems.qty,
+      weight: orderItems.weight,
       unitPrice: orderItems.unitPrice,
       subtotal: orderItems.subtotal,
       sellerName: orderItems.sellerName,
@@ -255,6 +262,10 @@ export async function getAdminShipment(id: number) {
     orderId: row.shipment.orderId,
     status: row.shipment.status,
     orderStatus: row.order.status,
+    provider: row.shipment.provider,
+    biteshipOrderId: row.shipment.biteshipOrderId,
+    biteshipTrackingId: row.shipment.biteshipTrackingId,
+    labelUrl: row.shipment.labelUrl,
     trackingNumber: row.shipment.trackingNumber,
     courierCode: row.shipment.courierCode,
     courier: row.shipment.courier,
@@ -349,6 +360,12 @@ export async function trackShipment(userId: number, isAdmin: boolean, query: str
 }
 
 async function resolveRate(input: CreateShipmentInput) {
+  if (typeof input.shippingRateId === 'string') {
+    throw new AppError(422, 'Tarif pengiriman tidak valid untuk mode lokal', {
+      details: { fields: { shippingRateId: 'Gunakan tarif lokal yang tersedia' } },
+    });
+  }
+
   if (input.shippingRateId !== undefined) {
     const [rate] = await db
       .select()
@@ -438,6 +455,140 @@ export async function createShipment(input: CreateShipmentInput) {
   }
 
   assertTransition(order.status, 'Dikirim');
+
+  if (isBiteshipEnabled()) {
+    const items = await db
+      .select({
+        productName: orderItems.productName,
+        variantSize: orderItems.variantSize,
+        qty: orderItems.qty,
+        weight: orderItems.weight,
+        unitPrice: orderItems.unitPrice,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id))
+      .orderBy(asc(orderItems.id));
+
+    const totalWeight = items.reduce((sum, item) => sum + item.weight * item.qty, 0);
+    const rate =
+      typeof input.shippingRateId === 'string'
+        ? await resolveBiteshipRate(order.shippingAreaId, totalWeight, input.shippingRateId)
+        : input.courier
+          ? await resolveBiteshipRate(
+              order.shippingAreaId,
+              totalWeight,
+              input.courier,
+              input.service,
+            )
+          : undefined;
+
+    if (!rate) {
+      throw new AppError(422, 'Tarif Biteship wajib dipilih', {
+        details: { fields: { shippingRateId: 'Gunakan tarif dari GET /shipping/rates' } },
+      });
+    }
+
+    // shortcut: the Biteship order is created before the DB transaction; a DB failure
+    // leaves an orphan Biteship order. Add reconciliation if this becomes frequent.
+    const biteshipOrder = await createBiteshipOrder({
+      orderId: order.id,
+      destination: {
+        name: order.recipientName,
+        phone: order.shippingPhone,
+        email: order.buyerEmail,
+        address: composeAddress({
+          address: order.shippingAddress,
+          district: order.shippingDistrict,
+          city: order.shippingCity,
+          province: order.shippingProvince,
+        }),
+        postalCode: order.shippingPostalCode,
+        areaId: order.shippingAreaId,
+        note: order.shippingNote,
+      },
+      courierCompany: rate.courierCode,
+      courierType: rate.courierType,
+      items: items.map((item) => ({
+        name: item.variantSize
+          ? `${item.productName} (${item.variantSize})`
+          : item.productName,
+        description: item.productName,
+        value: item.unitPrice,
+        quantity: item.qty,
+        weight: Math.max(1, item.weight),
+      })),
+    });
+
+    const labelUrl = await getBiteshipLabelUrl(biteshipOrder.id);
+    const trackingNumber =
+      biteshipOrder.courier?.waybill_id ??
+      biteshipOrder.courier?.tracking_id ??
+      `BTS-${order.id}-${Date.now()}`;
+    const now = new Date();
+
+    try {
+      const shipmentId = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(shipments)
+          .values({
+            orderId: order.id,
+            provider: 'biteship',
+            biteshipOrderId: biteshipOrder.id,
+            biteshipTrackingId: biteshipOrder.courier?.tracking_id ?? null,
+            labelUrl,
+            courierCode: biteshipOrder.courier?.company ?? rate.courierCode,
+            courier: rate.courier,
+            service: rate.service,
+            trackingNumber,
+            recipientName: order.recipientName,
+            phone: order.shippingPhone,
+            address: order.shippingAddress,
+            areaId: order.shippingAreaId,
+            district: order.shippingDistrict,
+            city: order.shippingCity,
+            province: order.shippingProvince,
+            postalCode: order.shippingPostalCode,
+            note: order.shippingNote,
+            shippedAt: now,
+          })
+          .returning({ id: shipments.id });
+
+        if (!created) {
+          throw new Error('Failed to create shipment');
+        }
+
+        const [updatedOrder] = await tx
+          .update(orders)
+          .set({ status: 'Dikirim', updatedAt: now })
+          .where(and(eq(orders.id, order.id), eq(orders.status, 'Diproses')))
+          .returning({ id: orders.id });
+
+        if (!updatedOrder) {
+          throw new AppError(422, 'Status pesanan tidak dapat dikirim', {
+            details: { fields: { status: 'Pesanan harus berstatus Diproses' } },
+          });
+        }
+
+        await tx.insert(trackingEvents).values({
+          shipmentId: created.id,
+          status: 'Dikirim',
+          location: 'Biteship',
+          description: `Pengiriman dibuat di Biteship (${biteshipOrder.status})`,
+          occurredAt: now,
+        });
+
+        return created.id;
+      });
+
+      return getAdminShipment(shipmentId);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new AppError(409, 'Pesanan sudah memiliki pengiriman', { code: 'CONFLICT' });
+      }
+
+      throw error;
+    }
+  }
 
   const rate = await resolveRate(input);
   const now = new Date();

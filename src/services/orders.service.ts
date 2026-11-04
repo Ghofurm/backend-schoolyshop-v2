@@ -9,7 +9,6 @@ import {
   products,
   sellers,
   shipments,
-  shippingRates,
   trackingEvents,
   users,
   variants,
@@ -23,6 +22,7 @@ import {
 import type { CheckoutInput, OrderListQuery } from '../schemas/orders.schema.js';
 import { AppError } from '../utils/httpError.js';
 import { paginate, paginationOffset, type PaginationMeta } from '../utils/pagination.js';
+import { resolveCheckoutRate } from './shipping.service.js';
 
 const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -367,6 +367,7 @@ export async function createCheckout(
         productName: products.name,
         productImage: products.image,
         productPrice: products.price,
+        productWeight: products.weight,
         variantId: variants.id,
         variantSku: variants.sku,
         variantSize: variants.size,
@@ -400,15 +401,12 @@ export async function createCheckout(
       throw new AppError(404, 'Alamat tidak ditemukan');
     }
 
-    const [rate] = await tx
-      .select()
-      .from(shippingRates)
-      .where(eq(shippingRates.id, input.shippingRateId))
-      .limit(1);
-
-    if (!rate) {
-      throw new AppError(404, 'Tarif pengiriman tidak ditemukan');
-    }
+    const weight = cartRows.reduce((sum, row) => sum + row.productWeight * row.qty, 0);
+    const rate = await resolveCheckoutRate({
+      shippingRateId: input.shippingRateId,
+      destinationAreaId: address.areaId,
+      weight,
+    });
 
     const [user] = await tx
       .select({ name: users.name, email: users.email, phone: users.phone })
@@ -488,6 +486,7 @@ export async function createCheckout(
         sellerRole: row.sellerRole,
         unitPrice,
         priceAdjustment,
+        weight: row.productWeight,
         qty: row.qty,
         subtotal: unitPrice * row.qty,
       });
