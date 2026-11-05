@@ -9,7 +9,7 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 | Runtime | Node.js (LTS) |
 | Bahasa | TypeScript |
 | Framework | Express.js |
-| Database | PostgreSQL |
+| Database | PostgreSQL (lokal / Neon) |
 | ORM | Drizzle ORM |
 | Hot reload | tsx |
 | Linter | ESLint |
@@ -72,12 +72,16 @@ Variabel yang tersedia:
 | `NODE_ENV` | Tidak | `development` | `development`, `test`, atau `production` |
 | `PORT` | Tidak | `3000` | Port server Express |
 | `FRONTEND_ORIGINS` | Tidak | `http://localhost:5173` | Origin frontend yang diizinkan CORS, dipisah koma |
-| `DB_HOST` | Ya | - | Host PostgreSQL |
+| `DATABASE_URL` | Tidak | - | Connection string **pooled** untuk runtime (mis. Neon). Bila diisi, `DB_*` tidak wajib |
+| `DATABASE_URL_DIRECT` | Tidak | - | Connection string **direct** untuk migration Drizzle; fallback ke `DATABASE_URL` |
+| `DB_HOST` | Ya* | - | Host PostgreSQL lokal |
 | `DB_PORT` | Tidak | `5432` | Port PostgreSQL |
-| `DB_USER` | Ya | - | User PostgreSQL |
-| `DB_PASSWORD` | Ya | - | Password PostgreSQL |
-| `DB_NAME` | Ya | - | Nama database |
-| `DB_SSL` | Tidak | `false` | Aktifkan SSL koneksi database |
+| `DB_USER` | Ya* | - | User PostgreSQL |
+| `DB_PASSWORD` | Ya* | - | Password PostgreSQL |
+| `DB_NAME` | Ya* | - | Nama database |
+| `DB_SSL` | Tidak | `false` | Aktifkan SSL koneksi database lokal |
+
+\* Wajib hanya bila `DATABASE_URL` kosong. Variabel `DB_*` adalah fallback untuk Postgres lokal.
 
 Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data lokal):
 
@@ -106,6 +110,31 @@ Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
 Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi.
 
 ## Setup Database
+
+### Opsi Neon (cloud)
+
+1. Daftar/login di [neon.com](https://neon.com), lalu buat project baru (mis. `schoolyshop`) dengan region **Singapore (`aws-ap-southeast-1`)**.
+2. Buka **Dashboard → Connection string** dan catat dua bentuk:
+   - **Pooled** → untuk `DATABASE_URL` (runtime aplikasi).
+   - **Direct** → untuk `DATABASE_URL_DIRECT` (migration Drizzle).
+3. Isi `.env` (jangan commit):
+
+   ```env
+   DATABASE_URL=postgresql://...-pooler...
+   DATABASE_URL_DIRECT=postgresql://...
+   ```
+
+4. Jalankan migrasi dan seed:
+
+   ```bash
+   npm run db:migrate   # memakai DATABASE_URL_DIRECT
+   npm run db:seed      # memakai runtime DATABASE_URL (pooled)
+   npm run dev
+   ```
+
+`DB_*` boleh dikosongkan jika `DATABASE_URL` sudah diisi. Neon compute bisa suspend saat idle, jadi request pertama setelah lama diam bisa terasa lebih lambat — itu normal. Connection string adalah secret; `.env` sudah masuk `.gitignore`.
+
+### Opsi PostgreSQL lokal
 
 Buat database PostgreSQL (sesuaikan dengan `DB_NAME`):
 
@@ -833,7 +862,7 @@ Ringkasan aktivitas: `totalOrders`, `completedOrders` (`Selesai`), `processingOr
 | `npm run lint:fix` | Menjalankan ESLint dan memperbaiki masalah otomatis |
 | `npm run typecheck` | Cek tipe tanpa menghasilkan file build |
 | `npm run db:generate` | Generate file migrasi dari schema |
-| `npm run db:migrate` | Menjalankan migrasi ke database |
+| `npm run db:migrate` | Menjalankan migrasi (memakai `DATABASE_URL_DIRECT` bila ada) |
 | `npm run db:push` | Sinkronisasi schema langsung ke database |
 | `npm run db:seed` | Mengisi akun dan katalog development |
 | `npm run db:studio` | Membuka Drizzle Studio |
