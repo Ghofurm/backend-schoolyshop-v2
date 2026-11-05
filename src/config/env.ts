@@ -79,15 +79,24 @@ function readBoolean(name: string, fallback = false): boolean {
   return normalized === 'true' || normalized === '1';
 }
 
+const databaseUrl = readOptional('DATABASE_URL');
+const databaseUrlDirect = readOptional('DATABASE_URL_DIRECT');
+
+function readDatabaseValue(name: string, fallback: string, required: boolean): string {
+  return required ? requireEnv(name) : readOptional(name, fallback);
+}
+
 export const env = Object.freeze({
   NODE_ENV: readEnvironment(),
   PORT: readPort('PORT', 3000),
   FRONTEND_ORIGINS: readList('FRONTEND_ORIGINS', ['http://localhost:5173']),
-  DB_HOST: requireEnv('DB_HOST'),
+  DATABASE_URL: databaseUrl,
+  DATABASE_URL_DIRECT: databaseUrlDirect,
+  DB_HOST: readDatabaseValue('DB_HOST', 'localhost', !databaseUrl),
   DB_PORT: readPort('DB_PORT', 5432),
-  DB_USER: requireEnv('DB_USER'),
-  DB_PASSWORD: requireEnv('DB_PASSWORD'),
-  DB_NAME: requireEnv('DB_NAME'),
+  DB_USER: readDatabaseValue('DB_USER', 'postgres', !databaseUrl),
+  DB_PASSWORD: readDatabaseValue('DB_PASSWORD', '', !databaseUrl),
+  DB_NAME: readDatabaseValue('DB_NAME', 'neondb', !databaseUrl),
   DB_SSL: readBoolean('DB_SSL'),
   BITESHIP_API_KEY: readOptional('BITESHIP_API_KEY'),
   BITESHIP_BASE_URL: readOptional('BITESHIP_BASE_URL', 'https://api.biteship.com'),
