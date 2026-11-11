@@ -93,10 +93,8 @@ gh api --method PUT repos/Ghofurm/backend-schoolyshop-v2/branches/develop/protec
 bypass darurat, ubah sementara lewat Settings → Branches, bukan dengan
 menonaktifkan proteksi permanen.
 
-> Catatan: repository private pada plan GitHub Free belum mendukung branch
-> protection/rulesets. Perintah proteksi di atas akan menghasilkan `403`
-> sampai repository dibuat public atau plan GitHub ditingkatkan. Sampai saat
-> itu, aturan branch berlaku sebagai konvensi tim.
+> Branch protection sudah diterapkan pada `main` dan `develop`. Perintah di
+> atas dipakai ulang bila konfigurasi proteksi berubah.
 
 ## Contoh alur
 
