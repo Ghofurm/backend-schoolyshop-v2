@@ -318,6 +318,10 @@ Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie h
 | `POST` | `/auth/login` | Body `{ email, password, rememberMe? }`; 200 mengembalikan profil user + cookie sesi; kredensial salah → 401 `INVALID_CREDENTIALS`; akun nonaktif → 403 `ACCOUNT_INACTIVE` |
 | `POST` | `/auth/logout` | Menghapus sesi dan cookie; 204 |
 | `GET` | `/auth/me` | Butuh sesi; mengembalikan profil lengkap user yang login; tanpa sesi → 401 `UNAUTHENTICATED` |
+| `POST` | `/auth/forgot-password` | Body `{ email }`; selalu 204 agar keberadaan email tidak bocor; maksimal 5 request/15 menit per IP, selebihnya 429 `RATE_LIMITED` + `Retry-After` |
+| `POST` | `/auth/reset-password` | Body `{ token, password }`; 204 jika berhasil. Token tidak valid/kedaluwarsa → 422 `VALIDATION` dengan `details.fields.token` |
+
+Token reset bersifat opaque, disimpan sebagai hash SHA-256, berlaku 30 menit, dan hanya bisa dipakai sekali. Setelah reset berhasil, semua sesi user dicabut. Backend belum mengirim email; pada `NODE_ENV` selain `production` token dicatat ke log server dengan prefix `[auth] Password reset token for ...`. Integrasi email dapat ditambahkan kemudian tanpa mengubah kontrak endpoint.
 
 Middleware `requireAuth` dan `requireAdmin` tersedia di `src/middlewares/auth.ts`. `requireAdmin` menolak non-admin dengan 403 `FORBIDDEN`.
 

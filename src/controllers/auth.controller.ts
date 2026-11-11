@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { env } from '../config/env.js';
-import { loginSchema, registerSchema } from '../schemas/auth.schema.js';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+} from '../schemas/auth.schema.js';
 import {
   SESSION_COOKIE,
   authenticateUser,
@@ -8,6 +13,8 @@ import {
   deleteSession,
   getSessionToken,
   registerUser,
+  requestPasswordReset,
+  resetUserPassword,
 } from '../services/auth.service.js';
 import { parseInput } from '../utils/validation.js';
 
@@ -47,4 +54,18 @@ export async function logout(req: Request, res: Response): Promise<void> {
 
 export function me(req: Request, res: Response): void {
   res.json(req.user);
+}
+
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  const input = parseInput(forgotPasswordSchema, req.body);
+
+  await requestPasswordReset(input.email);
+  res.status(204).end();
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  const input = parseInput(resetPasswordSchema, req.body);
+
+  await resetUserPassword(input.token, input.password);
+  res.status(204).end();
 }

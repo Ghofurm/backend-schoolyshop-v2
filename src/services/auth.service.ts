@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import { sessions, users, type UserStatus } from '../db/schema.js';
+import { env } from '../config/env.js';
+import { passwordResetTokens, sessions, users, type UserStatus } from '../db/schema.js';
 import { AppError } from '../utils/httpError.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { isUniqueViolation } from '../utils/postgres.js';
@@ -10,6 +11,7 @@ import { toUserProfile, type UserProfile } from './users.service.js';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export const SESSION_COOKIE = 'schoolyshop_session';
 
@@ -131,4 +133,93 @@ export async function findSessionUser(token: string): Promise<SessionUser | null
 
 export async function deleteSession(token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.id, hashToken(token)));
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+  // Keep both paths doing a DB transaction so a registered email is not obvious from timing.
+  await db.transaction(async (tx) => {
+    await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, user?.id ?? 0));
+
+    if (user) {
+      await tx.insert(passwordResetTokens).values({
+        id: tokenHash,
+        userId: user.id,
+        expiresAt,
+      });
+    }
+  });
+
+  // shortcut: no email provider yet; log tokens outside production until delivery is added.
+  if (user && env.NODE_ENV !== 'production') {
+    console.log(`[auth] Password reset token for ${email}: ${token}`);
+  }
+}
+
+function invalidResetToken(): AppError {
+  return new AppError(422, 'Tautan reset tidak valid atau sudah kedaluwarsa', {
+    code: 'VALIDATION',
+    details: {
+      fields: { token: 'Tautan reset tidak valid atau sudah kedaluwarsa' },
+    },
+  });
+}
+
+export async function resetUserPassword(token: string, password: string): Promise<void> {
+  const tokenHash = hashToken(token);
+
+  // Check cheaply before bcrypt so invalid tokens cannot burn CPU.
+  const [existing] = await db
+    .select({ id: passwordResetTokens.id })
+    .from(passwordResetTokens)
+    .where(
+      and(
+        eq(passwordResetTokens.id, tokenHash),
+        gt(passwordResetTokens.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    throw invalidResetToken();
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  await db.transaction(async (tx) => {
+    const [resetToken] = await tx
+      .delete(passwordResetTokens)
+      .where(
+        and(
+          eq(passwordResetTokens.id, tokenHash),
+          gt(passwordResetTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning({ userId: passwordResetTokens.userId });
+
+    if (!resetToken) {
+      throw invalidResetToken();
+    }
+
+    const [updated] = await tx
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, resetToken.userId))
+      .returning({ id: users.id });
+
+    if (!updated) {
+      throw new AppError(404, 'Pengguna tidak ditemukan');
+    }
+
+    await tx.delete(sessions).where(eq(sessions.userId, resetToken.userId));
+  });
 }

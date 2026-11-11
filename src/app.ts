@@ -12,6 +12,8 @@ import { routes } from './routes/index.js';
 export const app = express();
 
 app.disable('x-powered-by');
+// Render terminates TLS in front of the app, so trust its forwarding headers for req.ip.
+app.set('trust proxy', 1);
 
 if (env.NODE_ENV === 'development') {
   app.use(requestLogger);

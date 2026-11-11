@@ -75,6 +75,17 @@ export const sessions = pgTable('sessions', {
 
 export type Session = typeof sessions.$inferSelect;
 
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: varchar('id', { length: 64 }).primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 120 }).notNull().unique(),
