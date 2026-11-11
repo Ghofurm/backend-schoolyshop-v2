@@ -56,6 +56,25 @@ const notFound = { $ref: '#/components/responses/NotFound' };
 const conflict = { $ref: '#/components/responses/Conflict' };
 const validation = { $ref: '#/components/responses/Validation' };
 const serverError = { $ref: '#/components/responses/ServerError' };
+const rateLimited = {
+  description: 'Terlalu banyak permintaan',
+  headers: {
+    'Retry-After': {
+      description: 'Detik sampai permintaan berikutnya diperbolehkan',
+      schema: { type: 'integer', example: 900 },
+    },
+  },
+  content: {
+    'application/json': {
+      schema: ref('ErrorResponse'),
+      example: {
+        code: 'RATE_LIMITED',
+        message: 'Terlalu banyak permintaan. Coba lagi nanti.',
+        details: { retryAfter: 900 },
+      },
+    },
+  },
+};
 
 const success = ok('OK', {
   type: 'object',
@@ -190,6 +209,43 @@ export const openapiDocument = {
         responses: {
           '204': { description: 'Sesi dihapus' },
           '401': unauthorized,
+        },
+      },
+    },
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Minta instruksi reset kata sandi',
+        description:
+          'Selalu mengembalikan 204, baik email terdaftar maupun tidak, agar keberadaan akun tidak bisa ditebak.',
+        ...publicSecurity,
+        requestBody: body('ForgotPasswordRequest', { email: 'user@example.com' }),
+        responses: {
+          '204': { description: 'Permintaan diterima' },
+          '422': validation,
+          '429': rateLimited,
+        },
+      },
+    },
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Atur ulang kata sandi dengan token',
+        description:
+          'Token sekali pakai dan berlaku 30 menit. Setelah berhasil, semua sesi user dicabut.',
+        ...publicSecurity,
+        requestBody: body('ResetPasswordRequest', {
+          token: 'token-dari-email',
+          password: 'PasswordBaru123!',
+        }),
+        responses: {
+          '204': { description: 'Kata sandi diperbarui' },
+          '422': err(
+            'Token tidak valid/kedaluwarsa atau validasi gagal',
+            'VALIDATION',
+            'Tautan reset tidak valid atau sudah kedaluwarsa',
+            { fields: { token: 'Tautan reset tidak valid atau sudah kedaluwarsa' } },
+          ),
         },
       },
     },
@@ -1264,6 +1320,7 @@ export const openapiDocument = {
               'CONFLICT',
               'EMAIL_TAKEN',
               'VALIDATION',
+              'RATE_LIMITED',
               'SERVER',
             ],
           },
@@ -1318,6 +1375,21 @@ export const openapiDocument = {
           email: { type: 'string', format: 'email' },
           password: { type: 'string' },
           rememberMe: { type: 'boolean', default: false },
+        },
+      },
+      ForgotPasswordRequest: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+        },
+      },
+      ResetPasswordRequest: {
+        type: 'object',
+        required: ['token', 'password'],
+        properties: {
+          token: { type: 'string', minLength: 1, maxLength: 512 },
+          password: { type: 'string', minLength: 8, maxLength: 72 },
         },
       },
       UpdateProfileRequest: {

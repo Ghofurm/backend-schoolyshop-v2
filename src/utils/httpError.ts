@@ -8,6 +8,7 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'EMAIL_TAKEN'
   | 'VALIDATION'
+  | 'RATE_LIMITED'
   | 'SERVER';
 
 const DEFAULT_CODES: Partial<Record<number, ErrorCode>> = {
@@ -17,6 +18,7 @@ const DEFAULT_CODES: Partial<Record<number, ErrorCode>> = {
   404: 'NOT_FOUND',
   409: 'CONFLICT',
   422: 'VALIDATION',
+  429: 'RATE_LIMITED',
   500: 'SERVER',
 };
 
