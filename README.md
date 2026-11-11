@@ -306,6 +306,15 @@ npm run typecheck
 
 Jika menambah/mengubah endpoint, perbarui juga `src/docs/openapi.ts`.
 
+## Alur Kontribusi & Branch
+
+- `develop` — branch integrasi dan testing; target default pull request.
+- `main` — production; hanya menerima pull request dari `develop`.
+- Branch kerja (`feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`) dibuat dari `develop`, bukan dari `main`.
+- Jangan commit langsung ke `main` atau `develop`; perubahan masuk lewat pull request.
+
+Detail alur, penamaan branch, aturan merge, dan checklist admin ada di [`docs/branching.md`](docs/branching.md).
+
 ## Autentikasi & Sesi
 
 Kata sandi di-hash dengan **bcrypt** (cost 12). bcrypt dipilih karena pustaka matang, tersedia prebuilt untuk Node LTS, dan memadai untuk kebutuhan aplikasi ini.
