@@ -102,7 +102,8 @@ Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
 
 | Variabel | Wajib | Default | Keterangan |
 | --- | --- | --- | --- |
-| `MIDTRANS_SERVER_KEY` | Tidak | - | Aktifkan Midtrans Core API bila diisi |
+| `MIDTRANS_SERVER_KEY` | Tidak | - | Aktifkan Midtrans Core API bila diisi (Authorization API) |
+| `MIDTRANS_SIGNATURE_KEY` | Tidak | - | Signature Secret Key untuk verifikasi webhook; fallback ke Server Key bila kosong |
 | `MIDTRANS_CLIENT_KEY` | Tidak | - | Client key Midtrans (untuk frontend) |
 | `MIDTRANS_IS_PRODUCTION` | Tidak | `false` | `true` memakai API production dan mematikan simulate |
 | `MIDTRANS_BASE_URL` | Tidak | otomatis | Override base URL (sandbox/production) |
@@ -566,7 +567,7 @@ Mode Midtrans:
 
 - `POST /v2/charge` memakai `custom_expiry` 24 jam; `expiresAt` payment dan order disamakan dengan respons Midtrans.
 - `provider`, `externalOrderId`, `externalId`, dan `billerCode` disimpan di tabel `payments` (VA Mandiri memakai `bill_key` + `biller_code`).
-- `POST /webhooks/midtrans` memverifikasi `signature_key = SHA512(order_id + status_code + gross_amount + server_key)` dan mencocokkan nominal.
+- `POST /webhooks/midtrans` memverifikasi `signature_key = SHA512(order_id + status_code + gross_amount + signature_key_env)` memakai `MIDTRANS_SIGNATURE_KEY` (fallback ke `MIDTRANS_SERVER_KEY` bila kosong) dan mencocokkan nominal.
 - `settlement` (atau `capture` + fraud accept) → `markPaid`: payment `paid`, order `Menunggu Verifikasi` (admin tetap harus approve → `Diproses`).
 - `expire`/`cancel`/`deny`/`failure` → payment `expired`, order `Dibatalkan`, stok kembali.
 - `pending` tidak mengubah status; notifikasi duplikat diabaikan (idempotent).
