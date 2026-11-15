@@ -156,13 +156,16 @@ export function verifyMidtransSignature(params: {
   grossAmount: string;
   signature: string;
 }): boolean {
-  if (!env.MIDTRANS_SERVER_KEY || !params.signature) {
+  // Signature Secret Key terpisah dari Server Key di Midtrans; fallback untuk akun lama.
+  const signatureKey = env.MIDTRANS_SIGNATURE_KEY || env.MIDTRANS_SERVER_KEY;
+
+  if (!signatureKey || !params.signature) {
     return false;
   }
 
   const expected = createHash('sha512')
     .update(
-      `${params.orderId}${params.statusCode}${params.grossAmount}${env.MIDTRANS_SERVER_KEY}`,
+      `${params.orderId}${params.statusCode}${params.grossAmount}${signatureKey}`,
     )
     .digest('hex');
   const expectedBuffer = Buffer.from(expected);
