@@ -1,6 +1,6 @@
-import { desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import { shipments, trackingEvents } from '../db/schema.js';
+import { orders, shipments, trackingEvents } from '../db/schema.js';
 import type { BiteshipWebhookPayload } from '../schemas/biteship.schema.js';
 
 const STATUS_DESCRIPTIONS: Record<string, string> = {
@@ -50,6 +50,7 @@ export async function handleBiteshipWebhook(payload: BiteshipWebhookPayload): Pr
     status?: 'Dikirim' | 'Selesai';
     trackingNumber?: string;
     biteshipTrackingId?: string;
+    deliveredAt?: Date;
   } = { updatedAt: now };
 
   if (payload.courier_waybill_id) {
@@ -62,9 +63,18 @@ export async function handleBiteshipWebhook(payload: BiteshipWebhookPayload): Pr
 
   if (payload.status === 'delivered') {
     updates.status = 'Selesai';
+    updates.deliveredAt = shipment.deliveredAt ?? now;
   }
 
   await db.update(shipments).set(updates).where(eq(shipments.id, shipment.id));
+
+  // Biteship is the source of truth for delivery; finish the order without a worker.
+  if (payload.status === 'delivered') {
+    await db
+      .update(orders)
+      .set({ status: 'Selesai', updatedAt: now })
+      .where(and(eq(orders.id, shipment.orderId), eq(orders.status, 'Dikirim')));
+  }
 
   const status = payload.status ?? payload.event;
   const [latest] = await db

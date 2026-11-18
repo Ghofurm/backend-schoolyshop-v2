@@ -6,11 +6,7 @@ import type { CreatePaymentInput } from '../schemas/payments.schema.js';
 import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { cancelOrderForExpiry, expirePendingOrders } from './orders.service.js';
-import {
-  chargeMidtrans,
-  isMidtransEnabled,
-  isMidtransProductionEnabled,
-} from './midtrans.service.js';
+import { chargeMidtrans, isMidtransEnabled } from './midtrans.service.js';
 
 const METHODS = {
   BCA: { code: 'BCA', label: 'Virtual Account BCA', prefix: '8808' },
@@ -274,7 +270,7 @@ export async function getPayment(userId: number, paymentId: number): Promise<Pay
 }
 
 export async function simulatePayment(userId: number, paymentId: number): Promise<PaymentView> {
-  if (env.NODE_ENV === 'production' || isMidtransProductionEnabled()) {
+  if (env.NODE_ENV === 'production' || isMidtransEnabled()) {
     throw new AppError(404, 'Pembayaran tidak ditemukan');
   }
 

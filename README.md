@@ -87,7 +87,7 @@ Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data
 
 | Variabel | Wajib | Default | Keterangan |
 | --- | --- | --- | --- |
-| `BITESHIP_API_KEY` | Tidak | - | Aktifkan integrasi Biteship bila diisi |
+| `BITESHIP_API_KEY` | Tidak | - | Aktifkan integrasi Biteship bila diisi; non-production wajib berprefix `biteship_test.` |
 | `BITESHIP_BASE_URL` | Tidak | `https://api.biteship.com` | Base URL API Biteship |
 | `BITESHIP_ORIGIN_AREA_ID` | Tidak | - | Area ID asal pengiriman (disarankan) |
 | `BITESHIP_ORIGIN_POSTAL_CODE` | Tidak | - | Alternatif origin jika area ID kosong |
@@ -108,7 +108,23 @@ Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
 | `MIDTRANS_IS_PRODUCTION` | Tidak | `false` | `true` memakai API production dan mematikan simulate |
 | `MIDTRANS_BASE_URL` | Tidak | otomatis | Override base URL (sandbox/production) |
 
-Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi.
+Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi. Key Biteship non-`biteship_test.` juga ditolak saat `NODE_ENV` bukan `production`.
+
+## Checklist Demo Sandbox
+
+- [ ] Gunakan `BITESHIP_API_KEY` berprefix `biteship_test.`
+- [ ] Isi `BITESHIP_ORIGIN_AREA_ID` atau `BITESHIP_ORIGIN_POSTAL_CODE`
+- [ ] Isi `BITESHIP_ORIGIN_CONTACT_NAME`, `BITESHIP_ORIGIN_CONTACT_PHONE`, dan `BITESHIP_ORIGIN_ADDRESS`
+- [ ] Buat **Test Webhook** di dashboard Biteship ke URL HTTPS publik (ngrok/Cloudflare Tunnel)
+- [ ] Samakan `BITESHIP_WEBHOOK_HEADER_KEY` dan `BITESHIP_WEBHOOK_SECRET` dengan header di dashboard
+- [ ] Gunakan `MIDTRANS_SERVER_KEY` sandbox dan `MIDTRANS_IS_PRODUCTION=false`
+- [ ] Isi Payment Notification URL Midtrans dengan endpoint publik
+- [ ] Bayar VA sandbox lewat **Midtrans Simulator**, bukan bank asli
+- [ ] Jangan memakai `POST /payments/:id/simulate` saat `MIDTRANS_SERVER_KEY` terisi
+- [ ] Setelah simulasi status Biteship, cek timeline pelacakan user
+- [ ] Jika membutuhkan label, unduh dari dashboard Biteship atau upgrade paket Grow
+
+Batasan sandbox (webhook wajib HTTPS publik, label butuh paket Grow, rate limit ±5 request/detik) adalah urusan setup demo, bukan bug aplikasi.
 
 ## Setup Database
 
@@ -562,7 +578,7 @@ Default-nya pembayaran memakai VA lokal. Jika `MIDTRANS_SERVER_KEY` diisi, pembu
 | --- | --- | --- |
 | `POST` | `/payments` | Body `{ orderId, method }`; membuat VA Midtrans/lokal dan mengubah order `paymentStatus` menjadi `pending`; 201 |
 | `GET` | `/payments/:id` | Status + data VA; fallback lokal menghitung `expired` bila lewat `expiresAt` |
-| `POST` | `/payments/:id/simulate` | Khusus development: tandai lunas tanpa gateway; 404 di production atau saat Midtrans production aktif |
+| `POST` | `/payments/:id/simulate` | Khusus development tanpa Midtrans: tandai lunas tanpa gateway; 404 di production atau saat `MIDTRANS_SERVER_KEY` terisi |
 
 Aturan:
 
@@ -623,7 +639,7 @@ Body `POST /returns`:
 }
 ```
 
-`orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `adminNote` (masih `null` sampai issue admin).
+`orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `refundProofUrl`, `adminNote` (masih `null` sampai admin memutuskan).
 
 Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. File disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya di `photos[].url`.
 
@@ -634,6 +650,7 @@ Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PN
   "status": "Menunggu Keputusan",
   "decisionAt": null,
   "refundMethod": null,
+  "refundProofUrl": null,
   "adminNote": null,
   "submittedAt": "2026-01-01T00:00:00.000Z",
   "items": [
@@ -669,7 +686,7 @@ Rating 1–5, komentar opsional maksimal 1000 karakter. Duplikat → 409 `CONFLI
 
 ## Pengiriman & Pelacakan
 
-Default-nya pengiriman lokal satu resi per pesanan. Jika `BITESHIP_API_KEY` diisi, tarif, pencarian area, pembuatan resi, dan pelacakan memakai Biteship; tanpa key semuanya kembali ke data lokal. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`.
+Default-nya pengiriman lokal satu resi per pesanan. Jika `BITESHIP_API_KEY` diisi, tarif, pencarian area, pembuatan resi, dan pelacakan memakai Biteship; tanpa key semuanya kembali ke data lokal. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`. Webhook Biteship `delivered` juga menyimpan `deliveredAt` dan langsung menuntaskan order `Dikirim` menjadi `Selesai` (tanpa worker auto-confirm).
 
 Endpoint admin (`requireAdmin`):
 
@@ -700,7 +717,7 @@ Mode Biteship:
 - Produk admin bisa mengisi `weight`; nilai disimpan per produk dan disalin ke `order_items` saat checkout.
 - Respons tarif Biteship memakai `id` string (mis. `jne-reg`), bukan ID numerik lokal; checkout menerima keduanya.
 - Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. Order tetap `Diproses → Dikirim`.
-- Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status `delivered` menandai shipment `Selesai`. Event duplikat beruntun diabaikan.
+- Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status `delivered` menandai shipment `Selesai`, menyimpan `deliveredAt`, dan menuntaskan order `Dikirim` menjadi `Selesai`. Event duplikat beruntun diabaikan.
 - Gangguan/timeout Biteship → 502 `SERVER`, tanpa menulis data lokal setengah jadi.
 
 Catatan lokal:
@@ -814,15 +831,15 @@ Verifikasi hanya untuk order `Menunggu Verifikasi`, sudah `paid`, dan belum dive
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
 | `GET` | `/admin/returns` | Semua retur; filter `status`, cari pembeli/ID pesanan/produk/alasan; pagination + ringkasan per status |
-| `GET` | `/admin/returns/:id` | Detail pembeli, order, item, alasan, foto, metode refund |
-| `POST` | `/admin/returns/:id/approve` | Body `{ refundMethod, adminNote? }`; set status `Disetujui` |
+| `GET` | `/admin/returns/:id` | Detail pembeli, order, item, alasan, foto, metode refund, bukti refund |
+| `POST` | `/admin/returns/:id/approve` | Body `{ refundMethod, refundProofUrl?, adminNote? }`; set status `Disetujui` |
 | `POST` | `/admin/returns/:id/reject` | Body `{ adminNote }` wajib; set status `Ditolak` |
 
 - Status retur: `Menunggu Keputusan`, `Disetujui`, `Ditolak`.
-- Approve mengisi `decisionAt`/`refundMethod`/`adminNote` dan mengubah order terkait menjadi `Selesai` (pilihan yang ditetapkan; refund uang nyata menyusul).
+- Approve mengisi `decisionAt`/`refundMethod`/`refundProofUrl`/`adminNote` dan mengubah order terkait menjadi `Selesai`. Refund dilakukan manual oleh admin; `refundProofUrl` menyimpan tautan bukti transfer.
 - Reject mengisi `decisionAt`/`adminNote`; status order tidak diubah.
 - Retur yang sudah diputuskan tidak bisa diputus lagi → 409.
-- `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, dan `adminNote`.
+- `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, `refundProofUrl`, dan `adminNote`.
 
 ## Admin — Dashboard, User & Laporan
 

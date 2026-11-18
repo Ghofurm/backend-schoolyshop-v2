@@ -668,7 +668,9 @@ export const openapiDocument = {
     '/payments/{id}/simulate': {
       post: {
         tags: ['Payments'],
-        summary: 'Simulasi lunas (khusus development)',
+        summary: 'Simulasi lunas (khusus development tanpa Midtrans)',
+        description:
+          'Menandai pembayaran lunas secara lokal. Dinonaktifkan (404) di production atau saat MIDTRANS_SERVER_KEY terisi; gunakan Midtrans Sandbox Simulator.',
         parameters: [idParam],
         responses: {
           '200': ok('Pembayaran lunas', ref('Payment')),
@@ -751,6 +753,8 @@ export const openapiDocument = {
       post: {
         tags: ['Webhooks'],
         summary: 'Webhook status Biteship',
+        description:
+          'Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai.',
         ...publicSecurity,
         parameters: [
           param('x-biteship-webhook-secret', 'header', { type: 'string' }, { required: true }),
@@ -1701,6 +1705,7 @@ export const openapiDocument = {
           status: { type: 'string', enum: ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] },
           decisionAt: { type: 'string', format: 'date-time', nullable: true },
           refundMethod: { type: 'string', nullable: true },
+          refundProofUrl: { type: 'string', nullable: true },
           adminNote: { type: 'string', nullable: true },
           submittedAt: { type: 'string', format: 'date-time' },
           items: { type: 'array', items: ref('ReturnItem') },
@@ -2014,6 +2019,7 @@ export const openapiDocument = {
         required: ['refundMethod'],
         properties: {
           refundMethod: { type: 'string' },
+          refundProofUrl: { type: 'string', format: 'uri', maxLength: 1000 },
           adminNote: { type: 'string', maxLength: 500 },
         },
       },
@@ -2049,6 +2055,7 @@ export const openapiDocument = {
           orderId: { type: 'integer' },
           status: { type: 'string', enum: ['Dikirim', 'Selesai'] },
           provider: { type: 'string', enum: ['local', 'biteship'] },
+          deliveredAt: { type: 'string', format: 'date-time', nullable: true },
           biteshipOrderId: { type: 'string', nullable: true },
           biteshipTrackingId: { type: 'string', nullable: true },
           labelUrl: { type: 'string', nullable: true },

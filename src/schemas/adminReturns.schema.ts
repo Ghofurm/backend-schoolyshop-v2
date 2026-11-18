@@ -10,6 +10,7 @@ export const adminReturnListQuerySchema = paginationQuerySchema.extend({
 
 export const approveReturnSchema = z.object({
   refundMethod: z.string().trim().min(1, 'Metode refund wajib diisi').max(80),
+  refundProofUrl: z.string().trim().url('URL bukti refund tidak valid').max(1000).optional(),
   adminNote: z.string().trim().max(500).optional(),
 });
 
