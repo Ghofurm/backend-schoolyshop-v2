@@ -102,7 +102,7 @@ async function biteshipRequest<T>(path: string, init: RequestInit = {}): Promise
     if (!response.ok || payload.success === false) {
       throw new AppError(502, 'Layanan Biteship sedang tidak tersedia', {
         code: 'SERVER',
-        details: { status: response.status },
+        details: { status: response.status, message: payload.message ?? payload.error },
       });
     }
 
@@ -263,14 +263,30 @@ export async function createBiteshipOrder(params: {
   });
 }
 
-export async function getBiteshipLabelUrl(orderId: string): Promise<string | null> {
+export async function getBiteshipLabelUrl(
+  orderId: string,
+): Promise<{ url: string | null; error: string | null }> {
   try {
     const data = await biteshipRequest<{
       shipping_label?: { file_url?: string };
     }>(`/v1/orders/${encodeURIComponent(orderId)}/shipping_labels`);
+    const url = data.shipping_label?.file_url ?? null;
 
-    return data.shipping_label?.file_url ?? null;
-  } catch {
-    return null;
+    return {
+      url,
+      error: url ? null : 'Biteship tidak mengembalikan URL label',
+    };
+  } catch (error) {
+    const status = error instanceof AppError ? Number(error.details.status) : undefined;
+    const upstream =
+      error instanceof AppError && typeof error.details.message === 'string'
+        ? error.details.message.trim()
+        : '';
+    const message =
+      status === 403
+        ? 'Label Biteship memerlukan paket Grow atau lebih tinggi; unduh label dari dashboard Biteship'
+        : upstream || 'Gagal mengambil label Biteship';
+
+    return { url: null, error: message.slice(0, 500) };
   }
 }

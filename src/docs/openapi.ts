@@ -754,7 +754,7 @@ export const openapiDocument = {
         tags: ['Webhooks'],
         summary: 'Webhook status Biteship',
         description:
-          'Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai.',
+          'Status mengikuti snake_case Biteship (picking_up, in_transit, return_in_transit, courier_not_found, scheduled, dst.). Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai.',
         ...publicSecurity,
         parameters: [
           param('x-biteship-webhook-secret', 'header', { type: 'string' }, { required: true }),
@@ -1663,6 +1663,7 @@ export const openapiDocument = {
           expiresAt: { type: 'string', format: 'date-time' },
           status: { type: 'string', enum: ['unpaid', 'pending', 'paid', 'expired', 'refunded'] },
           paidAt: { type: 'string', format: 'date-time', nullable: true },
+          refundRequiredAt: { type: 'string', format: 'date-time', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
@@ -2059,6 +2060,7 @@ export const openapiDocument = {
           biteshipOrderId: { type: 'string', nullable: true },
           biteshipTrackingId: { type: 'string', nullable: true },
           labelUrl: { type: 'string', nullable: true },
+          labelError: { type: 'string', nullable: true },
           trackingNumber: { type: 'string' },
           courier: { type: 'string' },
           service: { type: 'string' },
