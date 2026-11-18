@@ -174,6 +174,7 @@ export async function getAdminOrderDetail(id: number) {
           expiresAt: payment.expiresAt.toISOString(),
           paidAt: payment.paidAt?.toISOString() ?? null,
           refundRequiredAt: payment.refundRequiredAt?.toISOString() ?? null,
+          refundAmount: payment.refundAmount,
         }
       : null,
   };

@@ -58,10 +58,24 @@ export async function handleMidtransWebhook(
   }
 
   if (['refund', 'partial_refund', 'chargeback', 'partial_chargeback'].includes(status)) {
-    if (payment.status !== 'refunded') {
+    const partial = status === 'partial_refund' || status === 'partial_chargeback';
+    const nextStatus = partial ? 'partial_refund' : 'refunded';
+    const parsedRefund = Number(payload.refund_amount);
+    const refundAmount =
+      Number.isFinite(parsedRefund) && parsedRefund > 0
+        ? Math.round(parsedRefund)
+        : partial
+          ? null
+          : payment.amount;
+
+    if (payment.status !== nextStatus || payment.refundAmount !== refundAmount) {
       await db
         .update(payments)
-        .set({ status: 'refunded', updatedAt: new Date() })
+        .set({
+          status: nextStatus,
+          refundAmount,
+          updatedAt: new Date(),
+        })
         .where(eq(payments.id, payment.id));
     }
     return;

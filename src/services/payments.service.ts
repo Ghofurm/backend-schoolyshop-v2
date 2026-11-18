@@ -29,6 +29,7 @@ export interface PaymentView {
   status: Payment['status'];
   paidAt: string | null;
   refundRequiredAt: string | null;
+  refundAmount: number | null;
   createdAt: string;
 }
 
@@ -46,6 +47,7 @@ function toView(payment: Payment): PaymentView {
     status: payment.status,
     paidAt: payment.paidAt?.toISOString() ?? null,
     refundRequiredAt: payment.refundRequiredAt?.toISOString() ?? null,
+    refundAmount: payment.refundAmount,
     createdAt: payment.createdAt.toISOString(),
   };
 }

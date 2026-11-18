@@ -10,6 +10,7 @@ export const midtransWebhookSchema = z
     signature_key: z.string().min(1),
     transaction_status: z.string().min(1),
     fraud_status: z.string().optional(),
+    refund_amount: z.union([z.string(), z.number()]).optional(),
     transaction_id: z.string().optional(),
     payment_type: z.string().optional(),
   })
