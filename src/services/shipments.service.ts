@@ -271,6 +271,7 @@ export async function getAdminShipment(id: number) {
     courier: row.shipment.courier,
     service: row.shipment.service,
     shippedAt: row.shipment.shippedAt.toISOString(),
+    deliveredAt: row.shipment.deliveredAt?.toISOString() ?? null,
     customerName: row.order.buyerName,
     customerEmail: row.order.buyerEmail,
     customerPhone: row.order.buyerPhone,

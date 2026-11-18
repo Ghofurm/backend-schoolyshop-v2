@@ -55,6 +55,7 @@ export interface ReturnView {
   status: ReturnStatus;
   decisionAt: string | null;
   refundMethod: string | null;
+  refundProofUrl: string | null;
   adminNote: string | null;
   submittedAt: string;
   items: ReturnItemView[];
@@ -95,6 +96,7 @@ function toView(
     status: request.status,
     decisionAt: request.decisionAt?.toISOString() ?? null,
     refundMethod: request.refundMethod,
+    refundProofUrl: request.refundProofUrl,
     adminNote: request.adminNote,
     submittedAt: request.createdAt.toISOString(),
     items: items.map(toItemView),

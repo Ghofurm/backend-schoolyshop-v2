@@ -81,13 +81,14 @@ function readBoolean(name: string, fallback = false): boolean {
 
 const databaseUrl = readOptional('DATABASE_URL');
 const databaseUrlDirect = readOptional('DATABASE_URL_DIRECT');
+const nodeEnv = readEnvironment();
 
 function readDatabaseValue(name: string, fallback: string, required: boolean): string {
   return required ? requireEnv(name) : readOptional(name, fallback);
 }
 
 export const env = Object.freeze({
-  NODE_ENV: readEnvironment(),
+  NODE_ENV: nodeEnv,
   PORT: readPort('PORT', 3000),
   FRONTEND_ORIGINS: readList('FRONTEND_ORIGINS', ['http://localhost:5173']),
   DATABASE_URL: databaseUrl,
@@ -117,3 +118,14 @@ export const env = Object.freeze({
   MIDTRANS_IS_PRODUCTION: readBoolean('MIDTRANS_IS_PRODUCTION'),
   MIDTRANS_BASE_URL: readOptional('MIDTRANS_BASE_URL'),
 });
+
+// Refuse live Biteship keys outside production to avoid real shipments during demos.
+if (
+  env.NODE_ENV !== 'production' &&
+  env.BITESHIP_API_KEY.length > 0 &&
+  !env.BITESHIP_API_KEY.startsWith('biteship_test.')
+) {
+  throw new Error(
+    'BITESHIP_API_KEY must start with "biteship_test." outside production; live keys are refused',
+  );
+}
