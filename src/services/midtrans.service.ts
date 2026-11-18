@@ -58,16 +58,19 @@ function parseExpiry(value: string | undefined): Date {
     : parsed;
 }
 
-async function midtransRequest<T>(path: string, body: unknown): Promise<T> {
+async function midtransRequest<T>(
+  path: string,
+  init: { method?: 'GET' | 'POST'; body?: unknown } = {},
+): Promise<T> {
   try {
     const response = await fetch(`${baseUrl()}${path}`, {
-      method: 'POST',
+      method: init.method ?? 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
         Authorization: authHeader(),
       },
-      body: JSON.stringify(body),
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
       signal: AbortSignal.timeout(15_000),
     });
     const payload = (await response.json().catch(() => ({}))) as {
@@ -128,7 +131,7 @@ export async function chargeMidtrans(params: {
           custom_expiry: { expiry_duration: DEFAULT_EXPIRY_HOURS, unit: 'hour' },
         };
 
-  const data = await midtransRequest<MidtransChargeResponse>('/v2/charge', body);
+  const data = await midtransRequest<MidtransChargeResponse>('/v2/charge', { body });
   const vaNumber =
     data.va_numbers?.[0]?.va_number ??
     data.permata_va_number ??
@@ -148,6 +151,18 @@ export async function chargeMidtrans(params: {
         : `Virtual Account ${params.method}`,
     expiresAt: parseExpiry(data.expiry_time),
   };
+}
+
+export async function isMidtransTransactionPaid(orderId: string): Promise<boolean> {
+  const data = await midtransRequest<{
+    transaction_status?: string;
+    fraud_status?: string;
+  }>(`/v2/${encodeURIComponent(orderId)}/status`, { method: 'GET' });
+
+  return (
+    data.transaction_status === 'settlement' ||
+    (data.transaction_status === 'capture' && (data.fraud_status ?? 'accept') === 'accept')
+  );
 }
 
 export function verifyMidtransSignature(params: {

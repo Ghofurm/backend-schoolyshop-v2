@@ -3,7 +3,8 @@ import { db } from '../config/database.js';
 import { payments } from '../db/schema.js';
 import type { MidtransWebhookPayload } from '../schemas/midtrans.schema.js';
 import { AppError } from '../utils/httpError.js';
-import { markPaid, markPaymentExpired } from './payments.service.js';
+import { markLateSettlement, markPaid, markPaymentExpired } from './payments.service.js';
+import { isMidtransTransactionPaid } from './midtrans.service.js';
 
 export async function handleMidtransWebhook(
   payload: MidtransWebhookPayload,
@@ -32,7 +33,20 @@ export async function handleMidtransWebhook(
   if (paid) {
     if (payment.status === 'pending') {
       await markPaid(payment.id);
+      return;
     }
+
+    // Late settlement after expiry: confirm with Midtrans, then flag a manual refund.
+    if (payment.status === 'expired') {
+      const confirmed = await isMidtransTransactionPaid(
+        payment.externalOrderId ?? payload.order_id,
+      );
+
+      if (confirmed) {
+        await markLateSettlement(payment.id);
+      }
+    }
+
     return;
   }
 

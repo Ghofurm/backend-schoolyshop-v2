@@ -266,6 +266,7 @@ export async function getAdminShipment(id: number) {
     biteshipOrderId: row.shipment.biteshipOrderId,
     biteshipTrackingId: row.shipment.biteshipTrackingId,
     labelUrl: row.shipment.labelUrl,
+    labelError: row.shipment.labelError,
     trackingNumber: row.shipment.trackingNumber,
     courierCode: row.shipment.courierCode,
     courier: row.shipment.courier,
@@ -520,7 +521,7 @@ export async function createShipment(input: CreateShipmentInput) {
       })),
     });
 
-    const labelUrl = await getBiteshipLabelUrl(biteshipOrder.id);
+    const label = await getBiteshipLabelUrl(biteshipOrder.id);
     const trackingNumber =
       biteshipOrder.courier?.waybill_id ??
       biteshipOrder.courier?.tracking_id ??
@@ -536,7 +537,8 @@ export async function createShipment(input: CreateShipmentInput) {
             provider: 'biteship',
             biteshipOrderId: biteshipOrder.id,
             biteshipTrackingId: biteshipOrder.courier?.tracking_id ?? null,
-            labelUrl,
+            labelUrl: label.url,
+            labelError: label.error,
             courierCode: biteshipOrder.courier?.company ?? rate.courierCode,
             courier: rate.courier,
             service: rate.service,
