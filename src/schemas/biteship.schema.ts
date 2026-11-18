@@ -12,6 +12,7 @@ export const biteshipWebhookSchema = z
     courier_driver_name: z.string().optional(),
     courier_driver_phone: z.string().optional(),
     price: z.number().optional(),
+    courier_link: z.string().min(1).max(1000).optional(),
   })
   .passthrough();
 

@@ -117,7 +117,7 @@ export async function chargeMidtrans(params: {
           payment_type: 'echannel',
           transaction_details: transactionDetails,
           echannel: {
-            bill_info1: 'Pembayaran:',
+            bill_info1: 'Bayar:',
             bill_info2: 'Belanja Schoolyshop',
           },
           customer_details: customerDetails,

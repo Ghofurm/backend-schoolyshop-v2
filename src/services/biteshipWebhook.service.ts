@@ -56,6 +56,9 @@ export async function handleBiteshipWebhook(payload: BiteshipWebhookPayload): Pr
     trackingNumber?: string;
     biteshipTrackingId?: string;
     deliveredAt?: Date;
+    courierLink?: string;
+    actualShippingCost?: number;
+    shippingCostDifference?: number;
   } = { updatedAt: now };
 
   if (payload.courier_waybill_id) {
@@ -64,6 +67,24 @@ export async function handleBiteshipWebhook(payload: BiteshipWebhookPayload): Pr
 
   if (payload.courier_tracking_id) {
     updates.biteshipTrackingId = payload.courier_tracking_id;
+  }
+
+  if (payload.courier_link) {
+    updates.courierLink = payload.courier_link;
+  }
+
+  if (payload.price !== undefined) {
+    const [order] = await db
+      .select({ shippingCost: orders.shippingCost })
+      .from(orders)
+      .where(eq(orders.id, shipment.orderId))
+      .limit(1);
+
+    if (order) {
+      const actual = Math.round(payload.price);
+      updates.actualShippingCost = actual;
+      updates.shippingCostDifference = actual - order.shippingCost;
+    }
   }
 
   if (payload.status === 'delivered') {

@@ -34,7 +34,14 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const VERIFICATION_DECISIONS = ['approve', 'reject'] as const;
 export type VerificationDecision = (typeof VERIFICATION_DECISIONS)[number];
 
-export const PAYMENT_STATUSES = ['unpaid', 'pending', 'paid', 'expired', 'refunded'] as const;
+export const PAYMENT_STATUSES = [
+  'unpaid',
+  'pending',
+  'paid',
+  'partial_refund',
+  'expired',
+  'refunded',
+] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const RETURN_STATUSES = ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] as const;
@@ -314,6 +321,7 @@ export const payments = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     paidAt: timestamp('paid_at', { withTimezone: true }),
     refundRequiredAt: timestamp('refund_required_at', { withTimezone: true }),
+    refundAmount: integer('refund_amount'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -444,6 +452,9 @@ export const shipments = pgTable(
     biteshipTrackingId: varchar('biteship_tracking_id', { length: 80 }),
     labelUrl: varchar('label_url', { length: 1000 }),
     labelError: varchar('label_error', { length: 500 }),
+    courierLink: varchar('courier_link', { length: 1000 }),
+    actualShippingCost: integer('actual_shipping_cost'),
+    shippingCostDifference: integer('shipping_cost_difference'),
     courierCode: varchar('courier_code', { length: 60 }).notNull(),
     courier: varchar('courier', { length: 60 }).notNull(),
     service: varchar('service', { length: 80 }).notNull(),

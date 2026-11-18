@@ -548,7 +548,7 @@ Alur lokal tanpa payment gateway/ongkir nyata: keranjang + alamat + tarif statis
 
 Status pesanan: `Menunggu Pembayaran`, `Menunggu Verifikasi`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. Setelah pembayaran lunas, order masuk `Menunggu Verifikasi` sampai admin memutuskan; approve → `Diproses`, reject → `Dibatalkan`. `Dibatalkan` juga dipakai untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
 
-Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
+Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `partial_refund`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
 
 Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat kirim, kurir/layanan/ETA/ongkir, serta nama/harga/varian/seller tiap item. Perubahan produk atau alamat setelah checkout tidak mengubah order/invoice lama.
 
@@ -596,6 +596,7 @@ Mode Midtrans:
 - `settlement` (atau `capture` + fraud accept) → `markPaid`: payment `paid`, order `Menunggu Verifikasi` (admin tetap harus approve → `Diproses`).
 - Settlement yang datang setelah order kedaluwarsa dicek ulang lewat `GET /v2/{order_id}/status`. Bila Midtrans mengonfirmasi uang masuk, payment tetap `paid` dengan `refundRequiredAt` terisi, sedangkan order tetap `Dibatalkan`; admin melihat penanda refund manual di detail pesanan.
 - `expire`/`cancel`/`deny`/`failure` → payment `expired`, order `Dibatalkan`, stok kembali.
+- Notifikasi `refund` menandai payment `refunded`; `partial_refund` memakai status `partial_refund` dan menyimpan nominal di `refundAmount` (tidak dianggap refund penuh). `bill_info1` Mandiri memakai teks `Bayar:` agar ≤ 10 karakter.
 - `pending` tidak mengubah status; notifikasi duplikat diabaikan (idempotent).
 - Midtrans down/timeout → 502 `SERVER`; tanpa key, alur lokal tetap jalan.
 
@@ -695,7 +696,7 @@ Endpoint admin (`requireAdmin`):
 | --- | --- | --- |
 | `GET` | `/admin/shipments` | Daftar order siap kirim + shipment; filter `status`, `courier`, cari `search`/`q` (resi/nama penerima), pagination |
 | `POST` | `/admin/shipments` | Body `{ orderId, shippingRateId }` atau `{ orderId, courier, service? }`; 201 |
-| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total, `labelUrl`, `labelError` |
+| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total, `labelUrl`, `labelError`, `courierLink`, biaya aktual dan selisihnya |
 | `GET` | `/admin/shipments/:id/tracking` | Riwayat event, terbaru dulu |
 
 Endpoint user (butuh login):
@@ -717,9 +718,12 @@ Mode Biteship:
 - Berat paket dihitung dari `products.weight` (gram, default `1000`) × qty keranjang; `weight` query pada `/shipping/rates` juga diterima.
 - Produk admin bisa mengisi `weight`; nilai disimpan per produk dan disalin ke `order_items` saat checkout.
 - Respons tarif Biteship memakai `id` string (mis. `jne-reg`), bukan ID numerik lokal; checkout menerima keduanya.
-- Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. Order tetap `Diproses → Dikirim`.
+- Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. `reference_id` memakai suffix waktu unik per percobaan agar retry tidak ditolak `already used`. Order tetap `Diproses → Dikirim`.
+- Kode pos tujuan divalidasi 5 digit angka sebelum request Biteship; nilai non-numerik ditolak 422.
 - Jika Shipping Label API gagal (mis. akun belum paket Grow), shipment tetap dibuat; `labelUrl` bernilai `null` dan `labelError` berisi pesan yang jelas. Label bisa diunduh dari dashboard Biteship.
 - Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status mengikuti dokumentasi Biteship (`picking_up`, `in_transit`, `return_in_transit`, `courier_not_found`, `scheduled`, dst.) dan tidak jatuh ke teks fallback. Status `delivered` menandai shipment `Selesai`, menyimpan `deliveredAt`, dan menuntaskan order `Dikirim` menjadi `Selesai`. Event duplikat beruntun diabaikan.
+- `order.price` dari webhook disimpan sebagai `actualShippingCost` beserta selisihnya (`shippingCostDifference`); `courier_link` disimpan bila tersedia.
+- Respons Biteship 429 di-retry dengan backoff singkat sebelum diterjemahkan menjadi 502.
 - Gangguan/timeout Biteship → 502 `SERVER`, tanpa menulis data lokal setengah jadi.
 
 Catatan lokal:
