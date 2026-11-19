@@ -123,6 +123,15 @@ Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
 
 Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi. Key Biteship non-`biteship_test.` juga ditolak saat `NODE_ENV` bukan `production`.
 
+Email (opsional; tanpa `BREVO_API_KEY` token reset hanya di-log di development):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `BREVO_API_KEY` | Tidak | - | Standard API key Brevo v3 (bukan token MCP) |
+| `BREVO_BASE_URL` | Tidak | `https://api.brevo.com` | Override base URL API Brevo |
+| `EMAIL_FROM` | Tidak | - | Pengirim, mis. `Schooly Shop <email@contoh.com>` |
+| `FRONTEND_URL` | Tidak | `http://localhost:5173` | Basis tautan reset kata sandi |
+
 ## Checklist Demo Sandbox
 
 - [ ] Gunakan `BITESHIP_API_KEY` berprefix `biteship_test.`
@@ -360,7 +369,7 @@ Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie h
 | `POST` | `/auth/forgot-password` | Body `{ email }`; selalu 204 agar keberadaan email tidak bocor; maksimal 5 request/15 menit per IP, selebihnya 429 `RATE_LIMITED` + `Retry-After` |
 | `POST` | `/auth/reset-password` | Body `{ token, password }`; 204 jika berhasil. Token tidak valid/kedaluwarsa → 422 `VALIDATION` dengan `details.fields.token` |
 
-Token reset bersifat opaque, disimpan sebagai hash SHA-256, berlaku 30 menit, dan hanya bisa dipakai sekali. Setelah reset berhasil, semua sesi user dicabut. Backend belum mengirim email; pada `NODE_ENV` selain `production` token dicatat ke log server dengan prefix `[auth] Password reset token for ...`. Integrasi email dapat ditambahkan kemudian tanpa mengubah kontrak endpoint.
+Token reset bersifat opaque, disimpan sebagai hash SHA-256, berlaku 30 menit, dan hanya bisa dipakai sekali. Setelah reset berhasil, semua sesi user dicabut. Jika `BREVO_API_KEY` dan `EMAIL_FROM` diisi, email HTML berisi tautan `{FRONTEND_URL}/reset-password?token=...` dikirim lewat Brevo; kegagalan kirim hanya di-log dan respons tetap 204. Tanpa kredensial Brevo (atau saat pengiriman gagal di development), token dicatat ke log server dengan prefix `[auth] Password reset token for ...`.
 
 Middleware `requireAuth` dan `requireAdmin` tersedia di `src/middlewares/auth.ts`. `requireAdmin` menolak non-admin dengan 403 `FORBIDDEN`.
 

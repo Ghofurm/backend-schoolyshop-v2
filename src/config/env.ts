@@ -122,6 +122,10 @@ export const env = Object.freeze({
   MIDTRANS_CLIENT_KEY: readOptional('MIDTRANS_CLIENT_KEY'),
   MIDTRANS_IS_PRODUCTION: readBoolean('MIDTRANS_IS_PRODUCTION'),
   MIDTRANS_BASE_URL: readOptional('MIDTRANS_BASE_URL'),
+  BREVO_API_KEY: readOptional('BREVO_API_KEY'),
+  BREVO_BASE_URL: readOptional('BREVO_BASE_URL', 'https://api.brevo.com'),
+  EMAIL_FROM: readOptional('EMAIL_FROM'),
+  FRONTEND_URL: readOptional('FRONTEND_URL', 'http://localhost:5173'),
 });
 
 // CORS with credentials cannot use a wildcard; production needs explicit frontend origins.
@@ -139,6 +143,10 @@ const s3Configured = s3Values.filter((value) => value.length > 0).length;
 
 if (s3Configured > 0 && s3Configured < s3Values.length) {
   throw new Error('S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be set together');
+}
+
+if (nodeEnv === 'production' && env.BREVO_API_KEY.length > 0 && env.EMAIL_FROM.length === 0) {
+  throw new Error('EMAIL_FROM is required in production when BREVO_API_KEY is set');
 }
 
 // Refuse live Biteship keys outside production to avoid real shipments during demos.
