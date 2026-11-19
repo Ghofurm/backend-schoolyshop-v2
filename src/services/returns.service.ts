@@ -1,12 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import {
-  RETURN_PHOTO_MAX_FILES,
-  RETURN_UPLOAD_DIR,
-} from '../config/uploads.js';
+import { RETURN_PHOTO_MAX_FILES } from '../config/uploads.js';
 import {
   orderItems,
   orders,
@@ -21,6 +17,7 @@ import {
 import type { CreateReturnInput } from '../schemas/returns.schema.js';
 import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
+import { storeUpload } from './storage.service.js';
 
 const ACTIVE_RETURN_STATUSES: ReturnStatus[] = ['Menunggu Keputusan', 'Disetujui'];
 
@@ -347,9 +344,6 @@ export async function addReturnPhotos(
     });
   }
 
-  const directory = path.join(RETURN_UPLOAD_DIR, String(returnId));
-  await mkdir(directory, { recursive: true });
-
   for (const file of files) {
     const extension = PHOTO_EXTENSIONS[file.mimetype];
 
@@ -360,11 +354,15 @@ export async function addReturnPhotos(
     }
 
     const filename = `${randomUUID()}${extension}`;
-    await writeFile(path.join(directory, filename), file.buffer);
+    const url = await storeUpload({
+      key: `returns/${returnId}/${filename}`,
+      body: file.buffer,
+      contentType: file.mimetype,
+    });
 
     await db.insert(returnPhotos).values({
       returnId,
-      url: `/uploads/returns/${returnId}/${filename}`,
+      url,
       originalName: path.basename(file.originalname).slice(0, 255),
       mimeType: file.mimetype,
       size: file.size,
