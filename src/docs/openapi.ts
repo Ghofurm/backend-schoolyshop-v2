@@ -668,7 +668,9 @@ export const openapiDocument = {
     '/payments/{id}/simulate': {
       post: {
         tags: ['Payments'],
-        summary: 'Simulasi lunas (khusus development)',
+        summary: 'Simulasi lunas (khusus development tanpa Midtrans)',
+        description:
+          'Menandai pembayaran lunas secara lokal. Dinonaktifkan (404) di production atau saat MIDTRANS_SERVER_KEY terisi; gunakan Midtrans Sandbox Simulator.',
         parameters: [idParam],
         responses: {
           '200': ok('Pembayaran lunas', ref('Payment')),
@@ -751,6 +753,8 @@ export const openapiDocument = {
       post: {
         tags: ['Webhooks'],
         summary: 'Webhook status Biteship',
+        description:
+          'Status mengikuti snake_case Biteship (picking_up, in_transit, return_in_transit, courier_not_found, scheduled, dst.). Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai.',
         ...publicSecurity,
         parameters: [
           param('x-biteship-webhook-secret', 'header', { type: 'string' }, { required: true }),
@@ -1005,7 +1009,7 @@ export const openapiDocument = {
         parameters: [
           param('search', 'query', { type: 'string' }),
           param('q', 'query', { type: 'string' }),
-          param('paymentStatus', 'query', { type: 'string', enum: ['unpaid', 'pending', 'paid', 'expired', 'refunded'] }),
+          param('paymentStatus', 'query', { type: 'string', enum: ['unpaid', 'pending', 'paid', 'partial_refund', 'expired', 'refunded'] }),
           param('orderStatus', 'query', { type: 'string', enum: ['Menunggu Pembayaran', 'Menunggu Verifikasi', 'Diproses', 'Dikirim', 'Dalam Pengembalian', 'Selesai', 'Dibatalkan'] }),
           pageParam,
           perPageParam,
@@ -1657,8 +1661,10 @@ export const openapiDocument = {
           billerCode: { type: 'string', nullable: true },
           amount: { type: 'integer' },
           expiresAt: { type: 'string', format: 'date-time' },
-          status: { type: 'string', enum: ['unpaid', 'pending', 'paid', 'expired', 'refunded'] },
+          status: { type: 'string', enum: ['unpaid', 'pending', 'paid', 'partial_refund', 'expired', 'refunded'] },
           paidAt: { type: 'string', format: 'date-time', nullable: true },
+          refundRequiredAt: { type: 'string', format: 'date-time', nullable: true },
+          refundAmount: { type: 'integer', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
@@ -1701,6 +1707,7 @@ export const openapiDocument = {
           status: { type: 'string', enum: ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] },
           decisionAt: { type: 'string', format: 'date-time', nullable: true },
           refundMethod: { type: 'string', nullable: true },
+          refundProofUrl: { type: 'string', nullable: true },
           adminNote: { type: 'string', nullable: true },
           submittedAt: { type: 'string', format: 'date-time' },
           items: { type: 'array', items: ref('ReturnItem') },
@@ -2014,6 +2021,7 @@ export const openapiDocument = {
         required: ['refundMethod'],
         properties: {
           refundMethod: { type: 'string' },
+          refundProofUrl: { type: 'string', format: 'uri', maxLength: 1000 },
           adminNote: { type: 'string', maxLength: 500 },
         },
       },
@@ -2049,9 +2057,14 @@ export const openapiDocument = {
           orderId: { type: 'integer' },
           status: { type: 'string', enum: ['Dikirim', 'Selesai'] },
           provider: { type: 'string', enum: ['local', 'biteship'] },
+          deliveredAt: { type: 'string', format: 'date-time', nullable: true },
           biteshipOrderId: { type: 'string', nullable: true },
           biteshipTrackingId: { type: 'string', nullable: true },
           labelUrl: { type: 'string', nullable: true },
+          labelError: { type: 'string', nullable: true },
+          courierLink: { type: 'string', nullable: true },
+          actualShippingCost: { type: 'integer', nullable: true },
+          shippingCostDifference: { type: 'integer', nullable: true },
           trackingNumber: { type: 'string' },
           courier: { type: 'string' },
           service: { type: 'string' },

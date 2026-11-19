@@ -34,7 +34,14 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const VERIFICATION_DECISIONS = ['approve', 'reject'] as const;
 export type VerificationDecision = (typeof VERIFICATION_DECISIONS)[number];
 
-export const PAYMENT_STATUSES = ['unpaid', 'pending', 'paid', 'expired', 'refunded'] as const;
+export const PAYMENT_STATUSES = [
+  'unpaid',
+  'pending',
+  'paid',
+  'partial_refund',
+  'expired',
+  'refunded',
+] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const RETURN_STATUSES = ['Menunggu Keputusan', 'Disetujui', 'Ditolak'] as const;
@@ -313,6 +320,8 @@ export const payments = pgTable(
     status: varchar('status', { length: 20 }).$type<PaymentStatus>().notNull().default('pending'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     paidAt: timestamp('paid_at', { withTimezone: true }),
+    refundRequiredAt: timestamp('refund_required_at', { withTimezone: true }),
+    refundAmount: integer('refund_amount'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -344,6 +353,7 @@ export const returns = pgTable(
       .default('Menunggu Keputusan'),
     decisionAt: timestamp('decision_at', { withTimezone: true }),
     refundMethod: varchar('refund_method', { length: 80 }),
+    refundProofUrl: varchar('refund_proof_url', { length: 1000 }),
     adminNote: varchar('admin_note', { length: 500 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -441,6 +451,10 @@ export const shipments = pgTable(
     biteshipOrderId: varchar('biteship_order_id', { length: 80 }),
     biteshipTrackingId: varchar('biteship_tracking_id', { length: 80 }),
     labelUrl: varchar('label_url', { length: 1000 }),
+    labelError: varchar('label_error', { length: 500 }),
+    courierLink: varchar('courier_link', { length: 1000 }),
+    actualShippingCost: integer('actual_shipping_cost'),
+    shippingCostDifference: integer('shipping_cost_difference'),
     courierCode: varchar('courier_code', { length: 60 }).notNull(),
     courier: varchar('courier', { length: 60 }).notNull(),
     service: varchar('service', { length: 80 }).notNull(),
@@ -456,6 +470,7 @@ export const shipments = pgTable(
     postalCode: varchar('postal_code', { length: 10 }).notNull(),
     note: varchar('note', { length: 500 }),
     shippedAt: timestamp('shipped_at', { withTimezone: true }).defaultNow().notNull(),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

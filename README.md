@@ -10,6 +10,7 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 | Bahasa | TypeScript |
 | Framework | Express.js |
 | Database | PostgreSQL (lokal / Neon) |
+| Object Storage | Neon Object Storage (S3-compatible) |
 | ORM | Drizzle ORM |
 | Hot reload | tsx |
 | Linter | ESLint |
@@ -83,11 +84,23 @@ Variabel yang tersedia:
 
 \* Wajib hanya bila `DATABASE_URL` kosong. Variabel `DB_*` adalah fallback untuk Postgres lokal.
 
+Neon Object Storage (opsional; tanpa kredensial S3 file disimpan di disk lokal):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `S3_ENDPOINT` | Tidak | - | Endpoint S3 project Neon |
+| `S3_REGION` | Tidak | `ap-southeast-1` | Region S3 |
+| `S3_BUCKET` | Tidak | - | Bucket `public_read` |
+| `S3_ACCESS_KEY_ID` | Tidak | - | Access key S3 |
+| `S3_SECRET_ACCESS_KEY` | Tidak | - | Secret key S3 |
+
+Kelima variabel S3 harus diisi bersamaan; konfigurasi sebagian membuat aplikasi gagal start. Ambil kredensial dengan `neon env pull -s object-storage`, lalu petakan `AWS_ENDPOINT_URL_S3`/`AWS_REGION`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` ke variabel `S3_*`.
+
 Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data lokal):
 
 | Variabel | Wajib | Default | Keterangan |
 | --- | --- | --- | --- |
-| `BITESHIP_API_KEY` | Tidak | - | Aktifkan integrasi Biteship bila diisi |
+| `BITESHIP_API_KEY` | Tidak | - | Aktifkan integrasi Biteship bila diisi; non-production wajib berprefix `biteship_test.` |
 | `BITESHIP_BASE_URL` | Tidak | `https://api.biteship.com` | Base URL API Biteship |
 | `BITESHIP_ORIGIN_AREA_ID` | Tidak | - | Area ID asal pengiriman (disarankan) |
 | `BITESHIP_ORIGIN_POSTAL_CODE` | Tidak | - | Alternatif origin jika area ID kosong |
@@ -108,7 +121,32 @@ Midtrans (opsional; tanpa server key memakai simulasi pembayaran lokal):
 | `MIDTRANS_IS_PRODUCTION` | Tidak | `false` | `true` memakai API production dan mematikan simulate |
 | `MIDTRANS_BASE_URL` | Tidak | otomatis | Override base URL (sandbox/production) |
 
-Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi.
+Aplikasi akan gagal cepat (fail-fast) saat dijalankan jika variabel wajib belum diisi. Key Biteship non-`biteship_test.` juga ditolak saat `NODE_ENV` bukan `production`.
+
+Email (opsional; tanpa `BREVO_API_KEY` token reset hanya di-log di development):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `BREVO_API_KEY` | Tidak | - | Standard API key Brevo v3 (bukan token MCP) |
+| `BREVO_BASE_URL` | Tidak | `https://api.brevo.com` | Override base URL API Brevo |
+| `EMAIL_FROM` | Tidak | - | Pengirim, mis. `Schooly Shop <email@contoh.com>` |
+| `FRONTEND_URL` | Tidak | `http://localhost:5173` | Basis tautan reset kata sandi |
+
+## Checklist Demo Sandbox
+
+- [ ] Gunakan `BITESHIP_API_KEY` berprefix `biteship_test.`
+- [ ] Isi `BITESHIP_ORIGIN_AREA_ID` atau `BITESHIP_ORIGIN_POSTAL_CODE`
+- [ ] Isi `BITESHIP_ORIGIN_CONTACT_NAME`, `BITESHIP_ORIGIN_CONTACT_PHONE`, dan `BITESHIP_ORIGIN_ADDRESS`
+- [ ] Buat **Test Webhook** di dashboard Biteship ke URL HTTPS publik (ngrok/Cloudflare Tunnel)
+- [ ] Samakan `BITESHIP_WEBHOOK_HEADER_KEY` dan `BITESHIP_WEBHOOK_SECRET` dengan header di dashboard
+- [ ] Gunakan `MIDTRANS_SERVER_KEY` sandbox dan `MIDTRANS_IS_PRODUCTION=false`
+- [ ] Isi Payment Notification URL Midtrans dengan endpoint publik
+- [ ] Bayar VA sandbox lewat **Midtrans Simulator**, bukan bank asli
+- [ ] Jangan memakai `POST /payments/:id/simulate` saat `MIDTRANS_SERVER_KEY` terisi
+- [ ] Setelah simulasi status Biteship, cek timeline pelacakan user
+- [ ] Jika membutuhkan label, unduh dari dashboard Biteship atau upgrade paket Grow
+
+Batasan sandbox (webhook wajib HTTPS publik, label butuh paket Grow, rate limit ±5 request/detik) adalah urusan setup demo, bukan bug aplikasi.
 
 ## Setup Database
 
@@ -294,7 +332,7 @@ Bentuk respons:
 
 ### CORS dan logger
 
-CORS mengizinkan origin dari `FRONTEND_ORIGINS` (dipisah koma) dan mengirim kredensial (cookie). Request logger (method, path, status, durasi) hanya aktif di `NODE_ENV=development`.
+CORS mengizinkan origin dari `FRONTEND_ORIGINS` (dipisah koma) dan mengirim kredensial (cookie). Daftar origin harus eksplisit; nilai `*` ditolak saat `NODE_ENV=production`. Request logger (method, path, status, durasi) hanya aktif di `NODE_ENV=development`.
 
 ### Sebelum commit
 
@@ -307,11 +345,20 @@ npm run typecheck
 
 Jika menambah/mengubah endpoint, perbarui juga `src/docs/openapi.ts`.
 
+## Alur Kontribusi & Branch
+
+- `develop` — branch integrasi dan testing; target default pull request.
+- `main` — production; hanya menerima pull request dari `develop`.
+- Branch kerja (`feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`) dibuat dari `develop`, bukan dari `main`.
+- Jangan commit langsung ke `main` atau `develop`; perubahan masuk lewat pull request.
+
+Detail alur, penamaan branch, aturan merge, dan checklist admin ada di [`docs/branching.md`](docs/branching.md).
+
 ## Autentikasi & Sesi
 
 Kata sandi di-hash dengan **bcrypt** (cost 12). bcrypt dipilih karena pustaka matang, tersedia prebuilt untuk Node LTS, dan memadai untuk kebutuhan aplikasi ini.
 
-Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie hanya berisi token asli; saat logout baris sesi dihapus, sehingga token tidak bisa dipakai lagi. Cookie `schoolyshop_session` bersifat `httpOnly`, `SameSite=Lax`, `Secure` di production, dan berlaku 1 hari (30 hari bila login mengirim `rememberMe: true`). Frontend harus mengirim request dengan kredensial (`credentials: 'include'`) dan origin-nya harus terdaftar di `FRONTEND_ORIGINS`.
+Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie hanya berisi token asli; saat logout baris sesi dihapus, sehingga token tidak bisa dipakai lagi. Cookie `schoolyshop_session` bersifat `httpOnly`, `SameSite=Lax` di development dan `SameSite=None; Secure` di production (wajib untuk frontend dan API beda domain), serta berlaku 1 hari (30 hari bila login mengirim `rememberMe: true`). Frontend harus mengirim request dengan kredensial (`credentials: 'include'`) dan origin-nya harus terdaftar eksplisit di `FRONTEND_ORIGINS` (wildcard ditolak di production).
 
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
@@ -322,7 +369,7 @@ Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie h
 | `POST` | `/auth/forgot-password` | Body `{ email }`; selalu 204 agar keberadaan email tidak bocor; maksimal 5 request/15 menit per IP, selebihnya 429 `RATE_LIMITED` + `Retry-After` |
 | `POST` | `/auth/reset-password` | Body `{ token, password }`; 204 jika berhasil. Token tidak valid/kedaluwarsa → 422 `VALIDATION` dengan `details.fields.token` |
 
-Token reset bersifat opaque, disimpan sebagai hash SHA-256, berlaku 30 menit, dan hanya bisa dipakai sekali. Setelah reset berhasil, semua sesi user dicabut. Backend belum mengirim email; pada `NODE_ENV` selain `production` token dicatat ke log server dengan prefix `[auth] Password reset token for ...`. Integrasi email dapat ditambahkan kemudian tanpa mengubah kontrak endpoint.
+Token reset bersifat opaque, disimpan sebagai hash SHA-256, berlaku 30 menit, dan hanya bisa dipakai sekali. Setelah reset berhasil, semua sesi user dicabut. Jika `BREVO_API_KEY` dan `EMAIL_FROM` diisi, email HTML berisi tautan `{FRONTEND_URL}/reset-password?token=...` dikirim lewat Brevo; kegagalan kirim hanya di-log dan respons tetap 204. Tanpa kredensial Brevo (atau saat pengiriman gagal di development), token dicatat ke log server dengan prefix `[auth] Password reset token for ...`.
 
 Middleware `requireAuth` dan `requireAdmin` tersedia di `src/middlewares/auth.ts`. `requireAdmin` menolak non-admin dengan 403 `FORBIDDEN`.
 
@@ -523,7 +570,7 @@ Alur lokal tanpa payment gateway/ongkir nyata: keranjang + alamat + tarif statis
 
 Status pesanan: `Menunggu Pembayaran`, `Menunggu Verifikasi`, `Diproses`, `Dikirim`, `Dalam Pengembalian`, `Selesai`, dan `Dibatalkan`. Setelah pembayaran lunas, order masuk `Menunggu Verifikasi` sampai admin memutuskan; approve → `Diproses`, reject → `Dibatalkan`. `Dibatalkan` juga dipakai untuk pesanan kedaluwarsa. Pesanan `Menunggu Pembayaran` otomatis dibatalkan saat dibaca setelah 24 jam, dan stok varian dikembalikan.
 
-Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
+Status pembayaran disimpan di order (`unpaid`, `pending`, `paid`, `partial_refund`, `expired`, `refunded`). Order lahir `unpaid`; setelah `POST /payments` menjadi `pending`, setelah dibayar menjadi `paid`. Invoice menampilkan nomor VA dari pembayaran terakhir bila sudah ada.
 
 Snapshot yang disimpan saat checkout: nama/email/telepon pembeli, seluruh alamat kirim, kurir/layanan/ETA/ongkir, serta nama/harga/varian/seller tiap item. Perubahan produk atau alamat setelah checkout tidak mengubah order/invoice lama.
 
@@ -553,7 +600,7 @@ Default-nya pembayaran memakai VA lokal. Jika `MIDTRANS_SERVER_KEY` diisi, pembu
 | --- | --- | --- |
 | `POST` | `/payments` | Body `{ orderId, method }`; membuat VA Midtrans/lokal dan mengubah order `paymentStatus` menjadi `pending`; 201 |
 | `GET` | `/payments/:id` | Status + data VA; fallback lokal menghitung `expired` bila lewat `expiresAt` |
-| `POST` | `/payments/:id/simulate` | Khusus development: tandai lunas tanpa gateway; 404 di production atau saat Midtrans production aktif |
+| `POST` | `/payments/:id/simulate` | Khusus development tanpa Midtrans: tandai lunas tanpa gateway; 404 di production atau saat `MIDTRANS_SERVER_KEY` terisi |
 
 Aturan:
 
@@ -561,7 +608,7 @@ Aturan:
 - `method` menerima `BCA`, `bni_va`, `Virtual Account Mandiri`, dan bentuk serupa (case-insensitive).
 - Metode tidak dikenal → 422 `VALIDATION` dengan `details.fields.method`.
 - Pembayaran/order lewat `expiresAt` saat dibaca → payment `expired`, order `Dibatalkan`, stok varian dikembalikan (fallback bila webhook terlewat).
-- `simulate` mengembalikan 404 di production.
+- `simulate` mengembalikan 404 di production atau saat `MIDTRANS_SERVER_KEY` terisi.
 
 Mode Midtrans:
 
@@ -569,7 +616,9 @@ Mode Midtrans:
 - `provider`, `externalOrderId`, `externalId`, dan `billerCode` disimpan di tabel `payments` (VA Mandiri memakai `bill_key` + `biller_code`).
 - `POST /webhooks/midtrans` memverifikasi `signature_key = SHA512(order_id + status_code + gross_amount + signature_key_env)` memakai `MIDTRANS_SIGNATURE_KEY` (fallback ke `MIDTRANS_SERVER_KEY` bila kosong) dan mencocokkan nominal.
 - `settlement` (atau `capture` + fraud accept) → `markPaid`: payment `paid`, order `Menunggu Verifikasi` (admin tetap harus approve → `Diproses`).
+- Settlement yang datang setelah order kedaluwarsa dicek ulang lewat `GET /v2/{order_id}/status`. Bila Midtrans mengonfirmasi uang masuk, payment tetap `paid` dengan `refundRequiredAt` terisi, sedangkan order tetap `Dibatalkan`; admin melihat penanda refund manual di detail pesanan.
 - `expire`/`cancel`/`deny`/`failure` → payment `expired`, order `Dibatalkan`, stok kembali.
+- Notifikasi `refund` menandai payment `refunded`; `partial_refund` memakai status `partial_refund` dan menyimpan nominal di `refundAmount` (tidak dianggap refund penuh). `bill_info1` Mandiri memakai teks `Bayar:` agar ≤ 10 karakter.
 - `pending` tidak mengubah status; notifikasi duplikat diabaikan (idempotent).
 - Midtrans down/timeout → 502 `SERVER`; tanpa key, alur lokal tetap jalan.
 
@@ -614,9 +663,9 @@ Body `POST /returns`:
 }
 ```
 
-`orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `adminNote` (masih `null` sampai issue admin).
+`orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `refundProofUrl`, `adminNote` (masih `null` sampai admin memutuskan).
 
-Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. File disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya di `photos[].url`.
+Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. Dengan kredensial `S3_*`, file diunggah ke bucket Neon Object Storage dan `photos[].url` berisi URL publik absolut. Tanpa kredensial, file disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya.
 
 ```json
 {
@@ -625,6 +674,7 @@ Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PN
   "status": "Menunggu Keputusan",
   "decisionAt": null,
   "refundMethod": null,
+  "refundProofUrl": null,
   "adminNote": null,
   "submittedAt": "2026-01-01T00:00:00.000Z",
   "items": [
@@ -660,7 +710,7 @@ Rating 1–5, komentar opsional maksimal 1000 karakter. Duplikat → 409 `CONFLI
 
 ## Pengiriman & Pelacakan
 
-Default-nya pengiriman lokal satu resi per pesanan. Jika `BITESHIP_API_KEY` diisi, tarif, pencarian area, pembuatan resi, dan pelacakan memakai Biteship; tanpa key semuanya kembali ke data lokal. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`.
+Default-nya pengiriman lokal satu resi per pesanan. Jika `BITESHIP_API_KEY` diisi, tarif, pencarian area, pembuatan resi, dan pelacakan memakai Biteship; tanpa key semuanya kembali ke data lokal. Admin membuat pengiriman untuk order `Diproses`; order berpindah ke `Dikirim` dan event pertama dibuat otomatis. Saat pembeli menerima pesanan, shipment dan event pelacakannya ikut menjadi `Selesai`. Webhook Biteship `delivered` juga menyimpan `deliveredAt` dan langsung menuntaskan order `Dikirim` menjadi `Selesai` (tanpa worker auto-confirm).
 
 Endpoint admin (`requireAdmin`):
 
@@ -668,7 +718,7 @@ Endpoint admin (`requireAdmin`):
 | --- | --- | --- |
 | `GET` | `/admin/shipments` | Daftar order siap kirim + shipment; filter `status`, `courier`, cari `search`/`q` (resi/nama penerima), pagination |
 | `POST` | `/admin/shipments` | Body `{ orderId, shippingRateId }` atau `{ orderId, courier, service? }`; 201 |
-| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total, `labelUrl` |
+| `GET` | `/admin/shipments/:id` | Detail penerima, alamat, kurir, resi, item, total, `labelUrl`, `labelError`, `courierLink`, biaya aktual dan selisihnya |
 | `GET` | `/admin/shipments/:id/tracking` | Riwayat event, terbaru dulu |
 
 Endpoint user (butuh login):
@@ -690,8 +740,12 @@ Mode Biteship:
 - Berat paket dihitung dari `products.weight` (gram, default `1000`) × qty keranjang; `weight` query pada `/shipping/rates` juga diterima.
 - Produk admin bisa mengisi `weight`; nilai disimpan per produk dan disalin ke `order_items` saat checkout.
 - Respons tarif Biteship memakai `id` string (mis. `jne-reg`), bukan ID numerik lokal; checkout menerima keduanya.
-- Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. Order tetap `Diproses → Dikirim`.
-- Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status `delivered` menandai shipment `Selesai`. Event duplikat beruntun diabaikan.
+- Saat shipment dibuat, backend memanggil `POST /v1/orders`, menyimpan `provider`, `biteshipOrderId`, `biteshipTrackingId`, resi/waybill, dan `labelUrl` dari Biteship. `reference_id` memakai suffix waktu unik per percobaan agar retry tidak ditolak `already used`. Order tetap `Diproses → Dikirim`.
+- Kode pos tujuan divalidasi 5 digit angka sebelum request Biteship; nilai non-numerik ditolak 422.
+- Jika Shipping Label API gagal (mis. akun belum paket Grow), shipment tetap dibuat; `labelUrl` bernilai `null` dan `labelError` berisi pesan yang jelas. Label bisa diunduh dari dashboard Biteship.
+- Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status mengikuti dokumentasi Biteship (`picking_up`, `in_transit`, `return_in_transit`, `courier_not_found`, `scheduled`, dst.) dan tidak jatuh ke teks fallback. Status `delivered` menandai shipment `Selesai`, menyimpan `deliveredAt`, dan menuntaskan order `Dikirim` menjadi `Selesai`. Event duplikat beruntun diabaikan.
+- `order.price` dari webhook disimpan sebagai `actualShippingCost` beserta selisihnya (`shippingCostDifference`); `courier_link` disimpan bila tersedia.
+- Respons Biteship 429 di-retry dengan backoff singkat sebelum diterjemahkan menjadi 502.
 - Gangguan/timeout Biteship → 502 `SERVER`, tanpa menulis data lokal setengah jadi.
 
 Catatan lokal:
@@ -761,7 +815,7 @@ Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `in
 - `weight` dalam gram, opsional (default `1000`); dipakai untuk tarif Biteship dan snapshot item pesanan.
 - Jika `variants` tidak dikirim, `stock` dipakai untuk membuat satu varian `All Size`.
 - Pada PATCH, varian dengan `id` di-update, varian tanpa `id` dibuat baru; varian yang tidak dikirim tetap ada. `stock` hanya boleh dipakai jika produk punya 0/1 varian.
-- `image` di respons berupa path publik (`/uploads/products/...`) dan dapat juga diisi langsung lewat URL/path pada create/update.
+- `image` di respons berupa URL publik (`https://.../schoolyshop-uploads/products/...`) saat Object Storage aktif, atau path lokal `/uploads/products/...` saat fallback disk; nilai ini juga bisa diisi langsung lewat URL/path pada create/update.
 
 ### Kategori
 
@@ -798,6 +852,7 @@ Verifikasi hanya untuk order `Menunggu Verifikasi`, sudah `paid`, dan belum dive
 
 - **Approve** → order `Diproses`, `verifiedAt` dan keputusan disimpan; shipment tetap dibuat terpisah.
 - **Reject** → order `Dibatalkan`, `paymentStatus` menjadi `refunded`, stok varian dikembalikan, alasan tersimpan di `verificationReason` dan terlihat pembeli di detail pesanan.
+- Detail pesanan menyertakan `payment.refundRequiredAt` bila ada settlement terlambat yang perlu direfund manual.
 - Ringkasan daftar memakai `summary.byStatus` berisi jumlah semua status (termasuk `Dibatalkan` dan `Menunggu Verifikasi`).
 
 ### Retur
@@ -805,15 +860,15 @@ Verifikasi hanya untuk order `Menunggu Verifikasi`, sudah `paid`, dan belum dive
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
 | `GET` | `/admin/returns` | Semua retur; filter `status`, cari pembeli/ID pesanan/produk/alasan; pagination + ringkasan per status |
-| `GET` | `/admin/returns/:id` | Detail pembeli, order, item, alasan, foto, metode refund |
-| `POST` | `/admin/returns/:id/approve` | Body `{ refundMethod, adminNote? }`; set status `Disetujui` |
+| `GET` | `/admin/returns/:id` | Detail pembeli, order, item, alasan, foto, metode refund, bukti refund |
+| `POST` | `/admin/returns/:id/approve` | Body `{ refundMethod, refundProofUrl?, adminNote? }`; set status `Disetujui` |
 | `POST` | `/admin/returns/:id/reject` | Body `{ adminNote }` wajib; set status `Ditolak` |
 
 - Status retur: `Menunggu Keputusan`, `Disetujui`, `Ditolak`.
-- Approve mengisi `decisionAt`/`refundMethod`/`adminNote` dan mengubah order terkait menjadi `Selesai` (pilihan yang ditetapkan; refund uang nyata menyusul).
+- Approve mengisi `decisionAt`/`refundMethod`/`refundProofUrl`/`adminNote` dan mengubah order terkait menjadi `Selesai`. Refund dilakukan manual oleh admin; `refundProofUrl` menyimpan tautan bukti transfer.
 - Reject mengisi `decisionAt`/`adminNote`; status order tidak diubah.
 - Retur yang sudah diputuskan tidak bisa diputus lagi → 409.
-- `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, dan `adminNote`.
+- `GET /returns` milik pembeli otomatis menampilkan `decisionAt`, `refundMethod`, `refundProofUrl`, dan `adminNote`.
 
 ## Admin — Dashboard, User & Laporan
 
@@ -855,6 +910,51 @@ Ringkasan aktivitas: `totalOrders`, `completedOrders` (`Selesai`), `processingOr
 - `startDate`/`endDate` format `YYYY-MM-DD`, timezone `Asia/Jakarta`, default bulan berjalan. `startDate > endDate` → 422.
 - Daftar menyertakan semua penjual (nilai 0 bila tidak ada penjualan) beserta `totals`; detail berisi `seller`, `period`, `products[]`, dan `totals`.
 - Ekspor CSV tetap dibuat di frontend, tidak ada endpoint ekspor.
+
+## Deploy ke Render
+
+Service backend memakai Render Web Service (Node, region Singapore). Konfigurasi:
+
+| Setting | Nilai |
+| --- | --- |
+| Branch | `main` |
+| Build command | `npm ci && npm run build` |
+| Start command | `npm start` |
+| Health check path | `/health` |
+| Plan | Free (demo; service tidur saat idle, request pertama lambat) |
+
+Env production yang wajib diisi di Render (jangan commit nilainya):
+
+| Variabel | Nilai |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | Connection string **pooled** Neon |
+| `FRONTEND_ORIGINS` | Origin frontend final, eksplisit (bukan `*`); placeholder sampai domain final tersedia |
+| `FRONTEND_URL` | Basis tautan reset, mis. origin frontend yang sama |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Kredensial Neon Object Storage |
+| `BITESHIP_API_KEY` | Key `biteship_test.` untuk sandbox |
+| `BITESHIP_ORIGIN_AREA_ID` / `BITESHIP_ORIGIN_POSTAL_CODE` dan kontak origin | Konfigurasi asal Biteship |
+| `BITESHIP_WEBHOOK_HEADER_KEY`, `BITESHIP_WEBHOOK_SECRET` | Harus sama dengan dashboard Biteship |
+| `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_SIGNATURE_KEY` | Kredensial sandbox |
+| `MIDTRANS_IS_PRODUCTION` | `false` |
+| `BREVO_API_KEY`, `EMAIL_FROM` | Pengiriman email reset kata sandi |
+
+Jalankan migrasi dari lokal sebelum traffic masuk (memakai `DATABASE_URL_DIRECT`):
+
+```bash
+npm run db:migrate
+```
+
+Webhook setelah URL Render live:
+
+- **Biteship Test Webhook URL:** `https://<service>.onrender.com/webhooks/biteship` dengan header/secret sesuai env.
+- **Midtrans Payment Notification URL:** `https://<service>.onrender.com/webhooks/midtrans`.
+
+Catatan:
+
+- Free tier Render tidur saat idle; webhook pertama bisa lambat. Midtrans/Biteship akan retry, jadi ini batasan demo, bukan bug.
+- `FRONTEND_ORIGINS` harus diganti ke domain frontend final sebelum demo lintas tim; wildcard ditolak di production.
+- Migrasi tidak dijalankan otomatis saat build; jalankan manual dengan direct URL.
 
 ## Scripts
 

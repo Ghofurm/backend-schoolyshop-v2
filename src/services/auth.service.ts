@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from '../utils/password.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { hashToken } from '../utils/token.js';
 import { toUserProfile, type UserProfile } from './users.service.js';
+import { sendEmail } from './mailer.service.js';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -159,9 +160,33 @@ export async function requestPasswordReset(email: string): Promise<void> {
     }
   });
 
-  // shortcut: no email provider yet; log tokens outside production until delivery is added.
-  if (user && env.NODE_ENV !== 'production') {
-    console.log(`[auth] Password reset token for ${email}: ${token}`);
+  // Send without awaiting so response timing does not reveal whether the email exists.
+  if (user) {
+    const resetUrl = `${env.FRONTEND_URL.replace(/\/+$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
+        <h2 style="color: #15803d;">Schooly Shop</h2>
+        <p>Kami menerima permintaan reset kata sandi untuk akun ini.</p>
+        <p>
+          <a href="${resetUrl}" style="display: inline-block; padding: 10px 16px; background: #15803d; color: #ffffff; text-decoration: none; border-radius: 6px;">
+            Reset kata sandi
+          </a>
+        </p>
+        <p>Tautan ini berlaku 30 menit dan hanya bisa dipakai sekali.</p>
+        <p>Jika kamu tidak meminta reset, abaikan email ini.</p>
+      </div>
+    `;
+
+    void sendEmail(email, 'Reset kata sandi Schooly Shop', html)
+      .then((sent) => {
+        // Keep the development fallback when Brevo is not configured or delivery fails.
+        if (!sent && env.NODE_ENV !== 'production') {
+          console.log(`[auth] Password reset token for ${email}: ${token}`);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('[auth] Failed to send password reset email:', error);
+      });
   }
 }
 

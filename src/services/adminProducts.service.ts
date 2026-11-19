@@ -1,9 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import { PRODUCT_UPLOAD_DIR } from '../config/uploads.js';
 import {
   categories,
   orderItems,
@@ -23,6 +20,7 @@ import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { paginate, paginationOffset } from '../utils/pagination.js';
 import { slugify } from '../utils/slug.js';
+import { storeUpload } from './storage.service.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 const NEW_PRODUCT_DAYS = 30;
@@ -583,15 +581,17 @@ export async function updateAdminProductImage(
     });
   }
 
-  const directory = path.join(PRODUCT_UPLOAD_DIR, String(id));
-  await mkdir(directory, { recursive: true });
   const filename = `${randomUUID()}${extension}`;
-  await writeFile(path.join(directory, filename), file.buffer);
+  const image = await storeUpload({
+    key: `products/${id}/${filename}`,
+    body: file.buffer,
+    contentType: file.mimetype,
+  });
 
   await db
     .update(products)
     .set({
-      image: `/uploads/products/${id}/${filename}`,
+      image,
       updatedAt: new Date(),
     })
     .where(eq(products.id, id));

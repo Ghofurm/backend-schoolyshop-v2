@@ -81,13 +81,14 @@ function readBoolean(name: string, fallback = false): boolean {
 
 const databaseUrl = readOptional('DATABASE_URL');
 const databaseUrlDirect = readOptional('DATABASE_URL_DIRECT');
+const nodeEnv = readEnvironment();
 
 function readDatabaseValue(name: string, fallback: string, required: boolean): string {
   return required ? requireEnv(name) : readOptional(name, fallback);
 }
 
 export const env = Object.freeze({
-  NODE_ENV: readEnvironment(),
+  NODE_ENV: nodeEnv,
   PORT: readPort('PORT', 3000),
   FRONTEND_ORIGINS: readList('FRONTEND_ORIGINS', ['http://localhost:5173']),
   DATABASE_URL: databaseUrl,
@@ -98,6 +99,11 @@ export const env = Object.freeze({
   DB_PASSWORD: readDatabaseValue('DB_PASSWORD', '', !databaseUrl),
   DB_NAME: readDatabaseValue('DB_NAME', 'neondb', !databaseUrl),
   DB_SSL: readBoolean('DB_SSL'),
+  S3_ENDPOINT: readOptional('S3_ENDPOINT'),
+  S3_REGION: readOptional('S3_REGION', 'ap-southeast-1'),
+  S3_BUCKET: readOptional('S3_BUCKET'),
+  S3_ACCESS_KEY_ID: readOptional('S3_ACCESS_KEY_ID'),
+  S3_SECRET_ACCESS_KEY: readOptional('S3_SECRET_ACCESS_KEY'),
   BITESHIP_API_KEY: readOptional('BITESHIP_API_KEY'),
   BITESHIP_BASE_URL: readOptional('BITESHIP_BASE_URL', 'https://api.biteship.com'),
   BITESHIP_ORIGIN_AREA_ID: readOptional('BITESHIP_ORIGIN_AREA_ID'),
@@ -116,4 +122,40 @@ export const env = Object.freeze({
   MIDTRANS_CLIENT_KEY: readOptional('MIDTRANS_CLIENT_KEY'),
   MIDTRANS_IS_PRODUCTION: readBoolean('MIDTRANS_IS_PRODUCTION'),
   MIDTRANS_BASE_URL: readOptional('MIDTRANS_BASE_URL'),
+  BREVO_API_KEY: readOptional('BREVO_API_KEY'),
+  BREVO_BASE_URL: readOptional('BREVO_BASE_URL', 'https://api.brevo.com'),
+  EMAIL_FROM: readOptional('EMAIL_FROM'),
+  FRONTEND_URL: readOptional('FRONTEND_URL', 'http://localhost:5173'),
 });
+
+// CORS with credentials cannot use a wildcard; production needs explicit frontend origins.
+if (nodeEnv === 'production' && env.FRONTEND_ORIGINS.includes('*')) {
+  throw new Error('FRONTEND_ORIGINS must list explicit origins in production; wildcard is not allowed');
+}
+
+const s3Values = [
+  env.S3_ENDPOINT,
+  env.S3_BUCKET,
+  env.S3_ACCESS_KEY_ID,
+  env.S3_SECRET_ACCESS_KEY,
+];
+const s3Configured = s3Values.filter((value) => value.length > 0).length;
+
+if (s3Configured > 0 && s3Configured < s3Values.length) {
+  throw new Error('S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be set together');
+}
+
+if (nodeEnv === 'production' && env.BREVO_API_KEY.length > 0 && env.EMAIL_FROM.length === 0) {
+  throw new Error('EMAIL_FROM is required in production when BREVO_API_KEY is set');
+}
+
+// Refuse live Biteship keys outside production to avoid real shipments during demos.
+if (
+  env.NODE_ENV !== 'production' &&
+  env.BITESHIP_API_KEY.length > 0 &&
+  !env.BITESHIP_API_KEY.startsWith('biteship_test.')
+) {
+  throw new Error(
+    'BITESHIP_API_KEY must start with "biteship_test." outside production; live keys are refused',
+  );
+}

@@ -6,11 +6,7 @@ import type { CreatePaymentInput } from '../schemas/payments.schema.js';
 import { AppError } from '../utils/httpError.js';
 import { isUniqueViolation } from '../utils/postgres.js';
 import { cancelOrderForExpiry, expirePendingOrders } from './orders.service.js';
-import {
-  chargeMidtrans,
-  isMidtransEnabled,
-  isMidtransProductionEnabled,
-} from './midtrans.service.js';
+import { chargeMidtrans, isMidtransEnabled } from './midtrans.service.js';
 
 const METHODS = {
   BCA: { code: 'BCA', label: 'Virtual Account BCA', prefix: '8808' },
@@ -32,6 +28,8 @@ export interface PaymentView {
   expiresAt: string;
   status: Payment['status'];
   paidAt: string | null;
+  refundRequiredAt: string | null;
+  refundAmount: number | null;
   createdAt: string;
 }
 
@@ -48,6 +46,8 @@ function toView(payment: Payment): PaymentView {
     expiresAt: payment.expiresAt.toISOString(),
     status: payment.status,
     paidAt: payment.paidAt?.toISOString() ?? null,
+    refundRequiredAt: payment.refundRequiredAt?.toISOString() ?? null,
+    refundAmount: payment.refundAmount,
     createdAt: payment.createdAt.toISOString(),
   };
 }
@@ -274,7 +274,7 @@ export async function getPayment(userId: number, paymentId: number): Promise<Pay
 }
 
 export async function simulatePayment(userId: number, paymentId: number): Promise<PaymentView> {
-  if (env.NODE_ENV === 'production' || isMidtransProductionEnabled()) {
+  if (env.NODE_ENV === 'production' || isMidtransEnabled()) {
     throw new AppError(404, 'Pembayaran tidak ditemukan');
   }
 
@@ -295,6 +295,20 @@ export async function simulatePayment(userId: number, paymentId: number): Promis
   }
 
   return markPaid(refreshed.id);
+}
+
+export async function markLateSettlement(paymentId: number): Promise<void> {
+  const now = new Date();
+
+  await db
+    .update(payments)
+    .set({
+      status: 'paid',
+      paidAt: now,
+      refundRequiredAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(payments.id, paymentId), eq(payments.status, 'expired')));
 }
 
 export async function markPaid(paymentId: number): Promise<PaymentView> {

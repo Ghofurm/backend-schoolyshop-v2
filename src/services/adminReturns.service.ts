@@ -82,6 +82,7 @@ function toView(
     submittedAt: row.request.createdAt.toISOString(),
     decisionAt: row.request.decisionAt?.toISOString() ?? null,
     refundMethod: row.request.refundMethod,
+    refundProofUrl: row.request.refundProofUrl,
     adminNote: row.request.adminNote,
     buyer: {
       name: row.buyerName,
@@ -286,6 +287,7 @@ export async function approveAdminReturn(id: number, input: ApproveReturnInput) 
         status: 'Disetujui',
         decisionAt: now,
         refundMethod: input.refundMethod,
+        refundProofUrl: input.refundProofUrl ?? null,
         adminNote: input.adminNote ?? null,
         updatedAt: now,
       })

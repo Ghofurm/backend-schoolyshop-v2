@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/httpError.js';
 
@@ -81,32 +83,42 @@ function originConfig() {
     : { origin_postal_code: Number(env.BITESHIP_ORIGIN_POSTAL_CODE) };
 }
 
+// Biteship sandbox allows ~5 requests/second; retry 429 with a short backoff.
+const RETRY_DELAYS_MS = [250, 750];
+
 async function biteshipRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
-    const response = await fetch(`${env.BITESHIP_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        Authorization: env.BITESHIP_API_KEY,
-        'Content-Type': 'application/json',
-        ...init.headers,
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    const payload = (await response.json().catch(() => ({}))) as {
-      success?: boolean;
-      error?: string;
-      message?: string;
-    };
-
-    if (!response.ok || payload.success === false) {
-      throw new AppError(502, 'Layanan Biteship sedang tidak tersedia', {
-        code: 'SERVER',
-        details: { status: response.status },
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await fetch(`${env.BITESHIP_BASE_URL}${path}`, {
+        ...init,
+        headers: {
+          Authorization: env.BITESHIP_API_KEY,
+          'Content-Type': 'application/json',
+          ...init.headers,
+        },
+        signal: AbortSignal.timeout(15_000),
       });
-    }
 
-    return payload as T;
+      if (response.status === 429 && attempt < RETRY_DELAYS_MS.length) {
+        await delay(RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok || payload.success === false) {
+        throw new AppError(502, 'Layanan Biteship sedang tidak tersedia', {
+          code: 'SERVER',
+          details: { status: response.status, message: payload.message ?? payload.error },
+        });
+      }
+
+      return payload as T;
+    }
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -234,6 +246,14 @@ export async function createBiteshipOrder(params: {
   courierType: string;
   items: BiteshipOrderItem[];
 }): Promise<BiteshipOrderResponse> {
+  const postalCode = params.destination.postalCode.trim();
+
+  if (!/^\d{5}$/.test(postalCode)) {
+    throw new AppError(422, 'Kode pos tidak valid', {
+      details: { fields: { postalCode: 'Kode pos harus 5 digit angka' } },
+    });
+  }
+
   const origin = originConfig();
 
   return biteshipRequest<BiteshipOrderResponse>('/v1/orders', {
@@ -250,27 +270,43 @@ export async function createBiteshipOrder(params: {
       destination_contact_phone: params.destination.phone,
       destination_contact_email: params.destination.email,
       destination_address: params.destination.address,
-      destination_postal_code: Number(params.destination.postalCode),
+      destination_postal_code: Number(postalCode),
       destination_area_id: params.destination.areaId,
       destination_note: params.destination.note ?? undefined,
       courier_company: params.courierCompany,
       courier_type: params.courierType,
       delivery_type: 'now',
-      reference_id: `SCH-ORDER-${params.orderId}`,
+      reference_id: `SCH-ORDER-${params.orderId}-${randomUUID().slice(0, 8)}`,
       metadata: { orderId: params.orderId },
       items: params.items,
     }),
   });
 }
 
-export async function getBiteshipLabelUrl(orderId: string): Promise<string | null> {
+export async function getBiteshipLabelUrl(
+  orderId: string,
+): Promise<{ url: string | null; error: string | null }> {
   try {
     const data = await biteshipRequest<{
       shipping_label?: { file_url?: string };
     }>(`/v1/orders/${encodeURIComponent(orderId)}/shipping_labels`);
+    const url = data.shipping_label?.file_url ?? null;
 
-    return data.shipping_label?.file_url ?? null;
-  } catch {
-    return null;
+    return {
+      url,
+      error: url ? null : 'Biteship tidak mengembalikan URL label',
+    };
+  } catch (error) {
+    const status = error instanceof AppError ? Number(error.details.status) : undefined;
+    const upstream =
+      error instanceof AppError && typeof error.details.message === 'string'
+        ? error.details.message.trim()
+        : '';
+    const message =
+      status === 403
+        ? 'Label Biteship memerlukan paket Grow atau lebih tinggi; unduh label dari dashboard Biteship'
+        : upstream || 'Gagal mengambil label Biteship';
+
+    return { url: null, error: message.slice(0, 500) };
   }
 }
