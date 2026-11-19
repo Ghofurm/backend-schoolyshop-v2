@@ -119,6 +119,11 @@ export const env = Object.freeze({
   MIDTRANS_BASE_URL: readOptional('MIDTRANS_BASE_URL'),
 });
 
+// CORS with credentials cannot use a wildcard; production needs explicit frontend origins.
+if (nodeEnv === 'production' && env.FRONTEND_ORIGINS.includes('*')) {
+  throw new Error('FRONTEND_ORIGINS must list explicit origins in production; wildcard is not allowed');
+}
+
 // Refuse live Biteship keys outside production to avoid real shipments during demos.
 if (
   env.NODE_ENV !== 'production' &&

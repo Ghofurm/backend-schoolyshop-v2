@@ -18,10 +18,13 @@ import {
 } from '../services/auth.service.js';
 import { parseInput } from '../utils/validation.js';
 
+const isProduction = env.NODE_ENV === 'production';
+
 const baseCookieOptions = {
   httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: env.NODE_ENV === 'production',
+  // Cross-site frontend (Vercel) and API (Render) require SameSite=None; Secure.
+  sameSite: isProduction ? ('none' as const) : ('lax' as const),
+  secure: isProduction,
   path: '/',
 };
 
