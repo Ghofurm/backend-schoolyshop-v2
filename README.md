@@ -918,7 +918,7 @@ Service backend memakai Render Web Service (Node, region Singapore). Konfigurasi
 | Setting | Nilai |
 | --- | --- |
 | Branch | `main` |
-| Build command | `npm ci && npm run build` |
+| Build command | `npm ci --include=dev && npm run build` |
 | Start command | `npm start` |
 | Health check path | `/health` |
 | Plan | Free (demo; service tidur saat idle, request pertama lambat) |
@@ -954,6 +954,7 @@ Catatan:
 
 - Free tier Render tidur saat idle; webhook pertama bisa lambat. Midtrans/Biteship akan retry, jadi ini batasan demo, bukan bug.
 - `FRONTEND_ORIGINS` harus diganti ke domain frontend final sebelum demo lintas tim; wildcard ditolak di production.
+- Build memakai `--include=dev` karena Render mengisi `NODE_ENV=production`, yang membuat `npm ci` melewati TypeScript dan type definitions.
 - Migrasi tidak dijalankan otomatis saat build; jalankan manual dengan direct URL.
 
 ## Scripts
