@@ -754,7 +754,7 @@ export const openapiDocument = {
         tags: ['Webhooks'],
         summary: 'Webhook status Biteship',
         description:
-          'Status mengikuti snake_case Biteship (picking_up, in_transit, return_in_transit, courier_not_found, scheduled, dst.). Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai.',
+          'Status mengikuti snake_case Biteship (picking_up, in_transit, return_in_transit, courier_not_found, scheduled, dst.). Status delivered menyimpan deliveredAt dan menuntaskan order Dikirim menjadi Selesai. Empty JSON POST dijawab 200 untuk validasi instalasi; event nyata tetap wajib header secret.',
         ...publicSecurity,
         parameters: [
           param('x-biteship-webhook-secret', 'header', { type: 'string' }, { required: true }),

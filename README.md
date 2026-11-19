@@ -744,6 +744,7 @@ Mode Biteship:
 - Kode pos tujuan divalidasi 5 digit angka sebelum request Biteship; nilai non-numerik ditolak 422.
 - Jika Shipping Label API gagal (mis. akun belum paket Grow), shipment tetap dibuat; `labelUrl` bernilai `null` dan `labelError` berisi pesan yang jelas. Label bisa diunduh dari dashboard Biteship.
 - Webhook `order.status`/`order.waybill_id` menambah `tracking_events`; status mengikuti dokumentasi Biteship (`picking_up`, `in_transit`, `return_in_transit`, `courier_not_found`, `scheduled`, dst.) dan tidak jatuh ke teks fallback. Status `delivered` menandai shipment `Selesai`, menyimpan `deliveredAt`, dan menuntaskan order `Dikirim` menjadi `Selesai`. Event duplikat beruntun diabaikan.
+- Instalasi webhook Biteship mengirim POST JSON kosong; endpoint menjawab 200 agar URL lolos validasi. Event nyata tetap wajib header secret yang cocok.
 - `order.price` dari webhook disimpan sebagai `actualShippingCost` beserta selisihnya (`shippingCostDifference`); `courier_link` disimpan bila tersedia.
 - Respons Biteship 429 di-retry dengan backoff singkat sebelum diterjemahkan menjadi 502.
 - Gangguan/timeout Biteship → 502 `SERVER`, tanpa menulis data lokal setengah jadi.

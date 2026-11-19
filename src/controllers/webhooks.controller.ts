@@ -20,7 +20,22 @@ function secretMatches(provided: string | undefined): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
+function isEmptyBody(body: unknown): boolean {
+  if (body === undefined || body === null || body === '') {
+    return true;
+  }
+
+  return typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length === 0;
+}
+
 export async function biteship(req: Request, res: Response): Promise<void> {
+  // Biteship probes a new webhook URL with an empty JSON POST before saving it.
+  // Accept only that handshake without a signature; real events still require the secret.
+  if (isEmptyBody(req.body)) {
+    res.json({ success: true });
+    return;
+  }
+
   const provided = req.get(env.BITESHIP_WEBHOOK_HEADER_KEY);
 
   if (!secretMatches(provided)) {
