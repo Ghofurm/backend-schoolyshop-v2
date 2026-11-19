@@ -310,7 +310,7 @@ Bentuk respons:
 
 ### CORS dan logger
 
-CORS mengizinkan origin dari `FRONTEND_ORIGINS` (dipisah koma) dan mengirim kredensial (cookie). Request logger (method, path, status, durasi) hanya aktif di `NODE_ENV=development`.
+CORS mengizinkan origin dari `FRONTEND_ORIGINS` (dipisah koma) dan mengirim kredensial (cookie). Daftar origin harus eksplisit; nilai `*` ditolak saat `NODE_ENV=production`. Request logger (method, path, status, durasi) hanya aktif di `NODE_ENV=development`.
 
 ### Sebelum commit
 
@@ -336,7 +336,7 @@ Detail alur, penamaan branch, aturan merge, dan checklist admin ada di [`docs/br
 
 Kata sandi di-hash dengan **bcrypt** (cost 12). bcrypt dipilih karena pustaka matang, tersedia prebuilt untuk Node LTS, dan memadai untuk kebutuhan aplikasi ini.
 
-Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie hanya berisi token asli; saat logout baris sesi dihapus, sehingga token tidak bisa dipakai lagi. Cookie `schoolyshop_session` bersifat `httpOnly`, `SameSite=Lax`, `Secure` di production, dan berlaku 1 hari (30 hari bila login mengirim `rememberMe: true`). Frontend harus mengirim request dengan kredensial (`credentials: 'include'`) dan origin-nya harus terdaftar di `FRONTEND_ORIGINS`.
+Sesi disimpan di tabel `sessions` sebagai hash SHA-256 dari token acak. Cookie hanya berisi token asli; saat logout baris sesi dihapus, sehingga token tidak bisa dipakai lagi. Cookie `schoolyshop_session` bersifat `httpOnly`, `SameSite=Lax` di development dan `SameSite=None; Secure` di production (wajib untuk frontend dan API beda domain), serta berlaku 1 hari (30 hari bila login mengirim `rememberMe: true`). Frontend harus mengirim request dengan kredensial (`credentials: 'include'`) dan origin-nya harus terdaftar eksplisit di `FRONTEND_ORIGINS` (wildcard ditolak di production).
 
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
