@@ -99,6 +99,11 @@ export const env = Object.freeze({
   DB_PASSWORD: readDatabaseValue('DB_PASSWORD', '', !databaseUrl),
   DB_NAME: readDatabaseValue('DB_NAME', 'neondb', !databaseUrl),
   DB_SSL: readBoolean('DB_SSL'),
+  S3_ENDPOINT: readOptional('S3_ENDPOINT'),
+  S3_REGION: readOptional('S3_REGION', 'ap-southeast-1'),
+  S3_BUCKET: readOptional('S3_BUCKET'),
+  S3_ACCESS_KEY_ID: readOptional('S3_ACCESS_KEY_ID'),
+  S3_SECRET_ACCESS_KEY: readOptional('S3_SECRET_ACCESS_KEY'),
   BITESHIP_API_KEY: readOptional('BITESHIP_API_KEY'),
   BITESHIP_BASE_URL: readOptional('BITESHIP_BASE_URL', 'https://api.biteship.com'),
   BITESHIP_ORIGIN_AREA_ID: readOptional('BITESHIP_ORIGIN_AREA_ID'),
@@ -122,6 +127,18 @@ export const env = Object.freeze({
 // CORS with credentials cannot use a wildcard; production needs explicit frontend origins.
 if (nodeEnv === 'production' && env.FRONTEND_ORIGINS.includes('*')) {
   throw new Error('FRONTEND_ORIGINS must list explicit origins in production; wildcard is not allowed');
+}
+
+const s3Values = [
+  env.S3_ENDPOINT,
+  env.S3_BUCKET,
+  env.S3_ACCESS_KEY_ID,
+  env.S3_SECRET_ACCESS_KEY,
+];
+const s3Configured = s3Values.filter((value) => value.length > 0).length;
+
+if (s3Configured > 0 && s3Configured < s3Values.length) {
+  throw new Error('S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be set together');
 }
 
 // Refuse live Biteship keys outside production to avoid real shipments during demos.

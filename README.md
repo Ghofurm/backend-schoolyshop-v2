@@ -10,6 +10,7 @@ Backend API untuk aplikasi e-commerce **Schoolyshop**. Project ini menyediakan f
 | Bahasa | TypeScript |
 | Framework | Express.js |
 | Database | PostgreSQL (lokal / Neon) |
+| Object Storage | Neon Object Storage (S3-compatible) |
 | ORM | Drizzle ORM |
 | Hot reload | tsx |
 | Linter | ESLint |
@@ -82,6 +83,18 @@ Variabel yang tersedia:
 | `DB_SSL` | Tidak | `false` | Aktifkan SSL koneksi database lokal |
 
 \* Wajib hanya bila `DATABASE_URL` kosong. Variabel `DB_*` adalah fallback untuk Postgres lokal.
+
+Neon Object Storage (opsional; tanpa kredensial S3 file disimpan di disk lokal):
+
+| Variabel | Wajib | Default | Keterangan |
+| --- | --- | --- | --- |
+| `S3_ENDPOINT` | Tidak | - | Endpoint S3 project Neon |
+| `S3_REGION` | Tidak | `ap-southeast-1` | Region S3 |
+| `S3_BUCKET` | Tidak | - | Bucket `public_read` |
+| `S3_ACCESS_KEY_ID` | Tidak | - | Access key S3 |
+| `S3_SECRET_ACCESS_KEY` | Tidak | - | Secret key S3 |
+
+Kelima variabel S3 harus diisi bersamaan; konfigurasi sebagian membuat aplikasi gagal start. Ambil kredensial dengan `neon env pull -s object-storage`, lalu petakan `AWS_ENDPOINT_URL_S3`/`AWS_REGION`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` ke variabel `S3_*`.
 
 Biteship (opsional; tanpa `BITESHIP_API_KEY` semua fitur pengiriman memakai data lokal):
 
@@ -643,7 +656,7 @@ Body `POST /returns`:
 
 `orderItemId` atau `productId` cukup salah satu. Qty tidak boleh melebihi qty pembelian. Field status yang disiapkan untuk keputusan admin: `status`, `decisionAt`, `refundMethod`, `refundProofUrl`, `adminNote` (masih `null` sampai admin memutuskan).
 
-Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. File disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya di `photos[].url`.
+Foto: maksimal 5 foto per pengajuan, masing-masing maksimal 5 MB, format JPEG/PNG/WebP. Dengan kredensial `S3_*`, file diunggah ke bucket Neon Object Storage dan `photos[].url` berisi URL publik absolut. Tanpa kredensial, file disimpan di folder lokal `uploads/returns/<returnId>/` (gitignored) dan disajikan lewat `/uploads/...`; respons memuat URL relatifnya.
 
 ```json
 {
@@ -793,7 +806,7 @@ Respons daftar menyertakan `summary` dari seluruh produk: `total`, `active`, `in
 - `weight` dalam gram, opsional (default `1000`); dipakai untuk tarif Biteship dan snapshot item pesanan.
 - Jika `variants` tidak dikirim, `stock` dipakai untuk membuat satu varian `All Size`.
 - Pada PATCH, varian dengan `id` di-update, varian tanpa `id` dibuat baru; varian yang tidak dikirim tetap ada. `stock` hanya boleh dipakai jika produk punya 0/1 varian.
-- `image` di respons berupa path publik (`/uploads/products/...`) dan dapat juga diisi langsung lewat URL/path pada create/update.
+- `image` di respons berupa URL publik (`https://.../schoolyshop-uploads/products/...`) saat Object Storage aktif, atau path lokal `/uploads/products/...` saat fallback disk; nilai ini juga bisa diisi langsung lewat URL/path pada create/update.
 
 ### Kategori
 
