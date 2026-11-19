@@ -911,6 +911,51 @@ Ringkasan aktivitas: `totalOrders`, `completedOrders` (`Selesai`), `processingOr
 - Daftar menyertakan semua penjual (nilai 0 bila tidak ada penjualan) beserta `totals`; detail berisi `seller`, `period`, `products[]`, dan `totals`.
 - Ekspor CSV tetap dibuat di frontend, tidak ada endpoint ekspor.
 
+## Deploy ke Render
+
+Service backend memakai Render Web Service (Node, region Singapore). Konfigurasi:
+
+| Setting | Nilai |
+| --- | --- |
+| Branch | `main` |
+| Build command | `npm ci && npm run build` |
+| Start command | `npm start` |
+| Health check path | `/health` |
+| Plan | Free (demo; service tidur saat idle, request pertama lambat) |
+
+Env production yang wajib diisi di Render (jangan commit nilainya):
+
+| Variabel | Nilai |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | Connection string **pooled** Neon |
+| `FRONTEND_ORIGINS` | Origin frontend final, eksplisit (bukan `*`); placeholder sampai domain final tersedia |
+| `FRONTEND_URL` | Basis tautan reset, mis. origin frontend yang sama |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Kredensial Neon Object Storage |
+| `BITESHIP_API_KEY` | Key `biteship_test.` untuk sandbox |
+| `BITESHIP_ORIGIN_AREA_ID` / `BITESHIP_ORIGIN_POSTAL_CODE` dan kontak origin | Konfigurasi asal Biteship |
+| `BITESHIP_WEBHOOK_HEADER_KEY`, `BITESHIP_WEBHOOK_SECRET` | Harus sama dengan dashboard Biteship |
+| `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_SIGNATURE_KEY` | Kredensial sandbox |
+| `MIDTRANS_IS_PRODUCTION` | `false` |
+| `BREVO_API_KEY`, `EMAIL_FROM` | Pengiriman email reset kata sandi |
+
+Jalankan migrasi dari lokal sebelum traffic masuk (memakai `DATABASE_URL_DIRECT`):
+
+```bash
+npm run db:migrate
+```
+
+Webhook setelah URL Render live:
+
+- **Biteship Test Webhook URL:** `https://<service>.onrender.com/webhooks/biteship` dengan header/secret sesuai env.
+- **Midtrans Payment Notification URL:** `https://<service>.onrender.com/webhooks/midtrans`.
+
+Catatan:
+
+- Free tier Render tidur saat idle; webhook pertama bisa lambat. Midtrans/Biteship akan retry, jadi ini batasan demo, bukan bug.
+- `FRONTEND_ORIGINS` harus diganti ke domain frontend final sebelum demo lintas tim; wildcard ditolak di production.
+- Migrasi tidak dijalankan otomatis saat build; jalankan manual dengan direct URL.
+
 ## Scripts
 
 | Script | Deskripsi |
